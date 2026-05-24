@@ -251,7 +251,23 @@ class CoordenacaoService {
       body: {'email': email.trim(), 'nome': nome.trim(), 'role': role},
     );
     if (res.status != 200) {
-      throw Exception(res.data?['error'] ?? 'Erro ao enviar convite.');
+      final erro = res.data?['error'] as String? ?? 'Erro ao enviar convite.';
+      if (erro.toLowerCase().contains('already been registered') ||
+          erro.toLowerCase().contains('already registered')) {
+        throw Exception('Este e-mail já está cadastrado. Exclua o usuário antes de reenviar o convite.');
+      }
+      throw Exception(erro);
+    }
+  }
+
+  // Exclui usuário do sistema via Edge Function
+  static Future<void> deletarUsuario(String userId) async {
+    final res = await _db.functions.invoke(
+      'deletar-usuario',
+      body: {'userId': userId},
+    );
+    if (res.status != 200) {
+      throw Exception(res.data?['error'] ?? 'Erro ao excluir usuário.');
     }
   }
 

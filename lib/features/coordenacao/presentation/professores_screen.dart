@@ -255,6 +255,67 @@ class _OpcoesSheet extends ConsumerStatefulWidget {
 class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
   bool _salvando = false;
 
+  Future<void> _confirmarExclusao(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final nomeAlvo  = widget.membro.nome;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.delete_forever_rounded,
+            color: AppColors.error, size: 32),
+        title: const Text('Excluir usuário?'),
+        content: Text(
+          'Isso vai remover ${widget.membro.nome} permanentemente do sistema. '
+          'Esta ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _salvando = true);
+    try {
+      await CoordenacaoService.deletarUsuario(widget.membro.id);
+      widget.ref.invalidate(professoresPerfisProvider);
+      if (mounted) {
+        navigator.pop();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('$nomeAlvo foi removido do sistema.'),
+            backgroundColor: AppColors.statusConcluida,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
+  }
+
   Future<void> _toggleAtivo() async {
     setState(() => _salvando = true);
     try {
@@ -366,6 +427,23 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
                   )
                 : null,
             onTap: _salvando ? null : _toggleAtivo,
+          ),
+
+          const Divider(),
+
+          // Excluir usuário
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.delete_forever_rounded, color: AppColors.error),
+            title: const Text(
+              'Excluir usuário',
+              style: TextStyle(color: AppColors.error),
+            ),
+            subtitle: const Text(
+              'Remove permanentemente do sistema',
+              style: TextStyle(fontSize: 12),
+            ),
+            onTap: _salvando ? null : () => _confirmarExclusao(context),
           ),
         ],
       ),
