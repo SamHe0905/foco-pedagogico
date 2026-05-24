@@ -30,6 +30,8 @@ class NotificationService {
   }
 
   static Future<void> initialize() async {
+    if (kIsWeb) return;
+
     // Registra handler de background (obrigatório antes de qualquer outra coisa)
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 

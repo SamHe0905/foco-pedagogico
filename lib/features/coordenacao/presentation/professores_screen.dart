@@ -21,17 +21,22 @@ class ProfessoresScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(isDirector ? 'Equipe' : 'Professores'),
       ),
-      body: async.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(
-              color: AppColors.primary, strokeWidth: 2.5),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: async.when(
+            loading: () => const Center(
+              child: CircularProgressIndicator(
+                  color: AppColors.primary, strokeWidth: 2.5),
+            ),
+            error: (_, __) => _ErrorState(
+              onRetry: () => ref.invalidate(professoresPerfisProvider),
+            ),
+            data: (membros) => membros.isEmpty
+                ? const _EmptyState()
+                : _MembrosList(membros: membros),
+          ),
         ),
-        error: (_, __) => _ErrorState(
-          onRetry: () => ref.invalidate(professoresPerfisProvider),
-        ),
-        data: (membros) => membros.isEmpty
-            ? const _EmptyState()
-            : _MembrosList(membros: membros),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _mostrarIntegrar(context, ref, isDirector),

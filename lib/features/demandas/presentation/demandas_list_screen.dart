@@ -42,10 +42,13 @@ class DemandasListScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          const SaudacaoHeader(),
-          const Divider(height: 1),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Column(
+            children: [
+              const SaudacaoHeader(),
+              const Divider(height: 1),
           async.when(
             data: (demandas) => _FilterBar(demandas: demandas),
             loading: () => const SizedBox.shrink(),
@@ -72,7 +75,9 @@ class DemandasListScreen extends ConsumerWidget {
               },
             ),
           ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

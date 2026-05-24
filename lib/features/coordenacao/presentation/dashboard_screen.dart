@@ -167,15 +167,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             // ignore: unused_result
             ref.refresh(coordenacaoDemandasProvider);
           },
-          child: demandas.isEmpty
-              ? const _EmptyState()
-              : _DashboardContent(
-                  demandas: demandas,
-                  selectedIds: _selectedIds,
-                  emModoSelecao: _emModoSelecao,
-                  onLongPress: _iniciarSelecao,
-                  onToggle: _toggleSelecao,
-                ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: demandas.isEmpty
+                  ? const _EmptyState()
+                  : _DashboardContent(
+                      demandas: demandas,
+                      selectedIds: _selectedIds,
+                      emModoSelecao: _emModoSelecao,
+                      onLongPress: _iniciarSelecao,
+                      onToggle: _toggleSelecao,
+                    ),
+            ),
+          ),
         ),
       ),
       floatingActionButton: _emModoSelecao

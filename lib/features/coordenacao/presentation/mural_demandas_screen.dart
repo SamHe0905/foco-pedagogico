@@ -24,7 +24,10 @@ class MuralDemandasScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: async.when(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: async.when(
         loading: () => const Center(
           child: CircularProgressIndicator(
               color: AppColors.primary, strokeWidth: 2.5),
@@ -82,6 +85,8 @@ class MuralDemandasScreen extends ConsumerWidget {
             ),
           );
         },
+          ),
+        ),
       ),
     );
   }
