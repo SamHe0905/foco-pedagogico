@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/router/app_router.dart';
 import '../domain/usuario.dart';
 import '../services/auth_service.dart';
+import 'auth_providers.dart';
 
 /// Tela intermediária usada pelo Supabase como redirectTo em fluxos de
 /// confirmação de e-mail (signup/invite).
@@ -52,9 +53,19 @@ class _AuthCallbackScreenState extends State<AuthCallbackScreen> {
       _set('Validando acesso...');
 
       // Troca o code (PKCE) ou token (implicit) por uma sessão.
-      // Para recovery, o GoRouterAuthNotifier já detectou o evento
-      // passwordRecovery e redirecionará para /criar-senha automaticamente.
       await client.auth.getSessionFromUrl(Uri.base, storeSession: true);
+
+      // Cede o controle para que microtasks pendentes (inclusive o listener
+      // do stream onAuthStateChange no GoRouterAuthNotifier) sejam executadas.
+      await Future.delayed(Duration.zero);
+
+      // Se era um link de recuperação de senha, o GoRouterAuthNotifier já
+      // setou pendingRecovery = true. Navegamos explicitamente e paramos aqui.
+      if (goRouterAuthNotifier.pendingRecovery) {
+        goRouterAuthNotifier.clearRecovery();
+        if (mounted) context.go(AppRoutes.criarSenha);
+        return;
+      }
 
       final session = client.auth.currentSession;
       if (session == null) {
