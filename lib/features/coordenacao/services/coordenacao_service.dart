@@ -30,18 +30,35 @@ class CoordenacaoService {
   // ── Todas as demandas (todos os coordenadores) — somente leitura ──────────
 
   static Future<List<DemandaResumo>> getTodasDemandas() async {
+    // Busca demandas sem join de FK (evita erro quando criada_por → auth.users)
     final data = await _db
         .from('demandas')
         .select(
           'id, titulo, descricao, turma, tipo, prazo, prioridade, '
-          'criador:profiles!criada_por(nome), '
-          'demanda_professor(status)',
+          'criada_por, demanda_professor(status)',
         )
         .order('criada_em', ascending: false);
 
-    return (data as List)
-        .map((m) => DemandaResumo.fromMap(m as Map<String, dynamic>))
-        .toList();
+    final rows = data as List;
+    if (rows.isEmpty) return [];
+
+    // Busca nomes dos criadores separadamente
+    final ids = rows.map((d) => d['criada_por'] as String).toSet().toList();
+    final perfis = await _db
+        .from('profiles')
+        .select('id, nome')
+        .inFilter('id', ids);
+
+    final nomeMap = {
+      for (final p in perfis as List) p['id'] as String: p['nome'] as String,
+    };
+
+    return rows.map((m) {
+      final map = Map<String, dynamic>.from(m as Map);
+      final nomeCriador = nomeMap[map['criada_por'] as String];
+      map['criador'] = nomeCriador != null ? {'nome': nomeCriador} : null;
+      return DemandaResumo.fromMap(map);
+    }).toList();
   }
 
   // ── Lista de turmas cadastradas ───────────────────────────────────────────
@@ -221,6 +238,17 @@ class CoordenacaoService {
         .toList();
   }
 
+  // Altera o cargo (role) de um membro da equipe via Edge Function (service role).
+  static Future<void> alterarCargo(String userId, String novoRole) async {
+    final res = await _db.functions.invoke(
+      'alterar-cargo',
+      body: {'userId': userId, 'novoRole': novoRole},
+    );
+    if (res.status != 200) {
+      throw Exception(res.data?['error'] ?? 'Erro ao alterar cargo.');
+    }
+  }
+
   static Future<void> toggleAtivoProfessor(String professorId, {required bool ativo}) async {
     await _db.from('professor_status').upsert({
       'professor_id': professorId,
@@ -252,9 +280,13 @@ class CoordenacaoService {
     );
     if (res.status != 200) {
       final erro = res.data?['error'] as String? ?? 'Erro ao enviar convite.';
-      if (erro.toLowerCase().contains('already been registered') ||
-          erro.toLowerCase().contains('already registered')) {
+      final erroLower = erro.toLowerCase();
+      if (erroLower.contains('already been registered') ||
+          erroLower.contains('already registered')) {
         throw Exception('Este e-mail já está cadastrado. Exclua o usuário antes de reenviar o convite.');
+      }
+      if (erroLower.contains('rate limit')) {
+        throw Exception('Limite de e-mails atingido. Aguarde alguns minutos e tente novamente.');
       }
       throw Exception(erro);
     }

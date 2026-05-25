@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../services/auth_service.dart';
@@ -160,7 +161,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => _mostrarEsqueciSenha(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                    child: const Text('Esqueci minha senha'),
+                  ),
+                ),
+                const SizedBox(height: 18),
 
                 // ── Erro ──────────────────────────────────────────────────
                 AnimatedSize(
@@ -186,7 +201,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         )
                       : const Text('Entrar'),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
+
+                // ── Criar conta ───────────────────────────────────────────
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.go(AppRoutes.cadastro),
+                    child: const Text('Não tenho conta — Criar conta'),
+                  ),
+                ),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -195,6 +219,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ),
   ),
 );
+  }
+
+  void _mostrarEsqueciSenha(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => _EsqueciSenhaDialog(
+        emailInicial: _emailController.text.trim(),
+      ),
+    );
   }
 
   TextStyle _labelStyle(BuildContext context) =>
@@ -263,6 +296,125 @@ class _ErroBanner extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Dialog: recuperar senha ──────────────────────────────────────────────────
+
+class _EsqueciSenhaDialog extends StatefulWidget {
+  final String emailInicial;
+  const _EsqueciSenhaDialog({required this.emailInicial});
+
+  @override
+  State<_EsqueciSenhaDialog> createState() => _EsqueciSenhaDialogState();
+}
+
+class _EsqueciSenhaDialogState extends State<_EsqueciSenhaDialog> {
+  late final TextEditingController _ctrl;
+  bool    _enviando = false;
+  bool    _enviado  = false;
+  String? _erro;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.emailInicial);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _enviar() async {
+    final email = _ctrl.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _erro = 'Informe um e-mail válido.');
+      return;
+    }
+    setState(() { _enviando = true; _erro = null; });
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'https://foco-pedagogico.vercel.app/auth/callback',
+      );
+      if (mounted) setState(() { _enviado = true; _enviando = false; });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _erro     = 'Não foi possível enviar. Verifique o e-mail.';
+          _enviando = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(_enviado ? 'E-mail enviado!' : 'Recuperar senha'),
+      content: _enviado
+          ? Text(
+              'Enviamos um link para ${_ctrl.text.trim()}.\n\n'
+              'Clique no link para criar uma nova senha.',
+              style: const TextStyle(height: 1.5),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Informe seu e-mail para receber o link de redefinição.',
+                  style: TextStyle(fontSize: 14, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _ctrl,
+                  keyboardType: TextInputType.emailAddress,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'E-mail',
+                    prefixIcon: Icon(Icons.email_outlined, size: 20),
+                  ),
+                  onSubmitted: (_) => _enviar(),
+                  onChanged:   (_) => setState(() => _erro = null),
+                ),
+                if (_erro != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _erro!,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.error),
+                  ),
+                ],
+              ],
+            ),
+      actions: _enviado
+          ? [
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ]
+          : [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: _enviando ? null : _enviar,
+                child: _enviando
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Enviar'),
+              ),
+            ],
     );
   }
 }

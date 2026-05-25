@@ -70,24 +70,54 @@ class AuthService {
   // ── Helpers privados ──────────────────────────────────────────────────────
 
   static Future<Usuario> _buscarPerfil(String userId, String email) async {
-    try {
-      final data = await _db
-          .from('profiles')
-          .select('nome, role')
-          .eq('id', userId)
-          .single();
+    // Tenta buscar o perfil existente
+    var data = await _db
+        .from('profiles')
+        .select('nome, role')
+        .eq('id', userId)
+        .maybeSingle();
 
-      return Usuario(
-        id: userId,
-        email: email,
-        nome: data['nome'] as String,
-        role: RoleUsuarioX.fromString(data['role'] as String),
-      );
-    } catch (_) {
+    // Perfil ainda não existe — tenta criar automaticamente
+    if (data == null) {
+      final authUser = _auth.currentUser;
+      final nomeRaw = authUser?.userMetadata?['nome'] as String?;
+      final roleRaw = authUser?.userMetadata?['role'] as String?;
+      final nome = (nomeRaw != null && nomeRaw.trim().isNotEmpty)
+          ? nomeRaw.trim()
+          : email.split('@').first;
+      final role = (roleRaw != null && roleRaw.trim().isNotEmpty)
+          ? roleRaw.trim()
+          : 'professor';
+
+      try {
+        await _db.from('profiles').insert({
+          'id':   userId,
+          'nome': nome,
+          'role': role,
+        });
+        data = {'nome': nome, 'role': role};
+      } catch (_) {
+        // INSERT falhou (RLS ou perfil criado por outro caminho) — tenta buscar novamente
+        data = await _db
+            .from('profiles')
+            .select('nome, role')
+            .eq('id', userId)
+            .maybeSingle();
+      }
+    }
+
+    if (data == null) {
       throw const AppAuthException(
         'Perfil não encontrado. Entre em contato com a coordenação.',
       );
     }
+
+    return Usuario(
+      id: userId,
+      email: email,
+      nome: data['nome'] as String,
+      role: RoleUsuarioX.fromString(data['role'] as String),
+    );
   }
 
   static String _mapErro(String msg) {

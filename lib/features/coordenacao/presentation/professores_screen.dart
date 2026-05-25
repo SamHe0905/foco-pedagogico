@@ -316,6 +316,74 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
     }
   }
 
+  Future<void> _alterarCargo(BuildContext context) async {
+    final isDirector =
+        ref.read(currentUserProvider).valueOrNull?.role.isDirector ?? false;
+    final opcoes =
+        isDirector ? _rolesParaDiretor : _rolesParaCoordenador;
+    String roleSelecionada = widget.membro.role;
+
+    final novoRole = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: Text('Cargo de ${widget.membro.nome}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: opcoes.map((opt) {
+              final (value, label) = opt;
+              return RadioListTile<String>(
+                value: value,
+                groupValue: roleSelecionada,
+                title: Text(label),
+                contentPadding: EdgeInsets.zero,
+                onChanged: (v) => setDialog(() => roleSelecionada = v!),
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, roleSelecionada),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (novoRole == null || novoRole == widget.membro.role || !mounted) return;
+
+    setState(() => _salvando = true);
+    try {
+      await CoordenacaoService.alterarCargo(widget.membro.id, novoRole);
+      widget.ref.invalidate(professoresPerfisProvider);
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cargo de ${widget.membro.nome} atualizado.'),
+            backgroundColor: AppColors.statusConcluida,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erro ao alterar cargo.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
+  }
+
   Future<void> _toggleAtivo() async {
     setState(() => _salvando = true);
     try {
@@ -393,6 +461,22 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
 
           const Divider(),
 
+          // Alterar cargo
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.badge_outlined, color: AppColors.secondary),
+            title: const Text('Alterar cargo'),
+            subtitle: Text(
+              'Cargo atual: ${_labelCargo(widget.membro.role)}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded,
+                color: AppColors.textHint),
+            onTap: _salvando ? null : () => _alterarCargo(context),
+          ),
+
+          const Divider(),
+
           // Ativar / Desativar
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -449,6 +533,14 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
       ),
     );
   }
+
+  String _labelCargo(String role) => switch (role) {
+        'coordenacao'     => 'Coordenação',
+        'supervisor'      => 'Supervisor',
+        'diretor'         => 'Diretor',
+        'diretor-adjunto' => 'Dir. Adjunto',
+        _                 => 'Professor',
+      };
 
   void _mostrarTurmas(BuildContext context) {
     showModalBottomSheet(

@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/domain/usuario.dart';
+import '../../features/auth/presentation/auth_callback_screen.dart';
 import '../../features/auth/presentation/auth_providers.dart';
+import '../../features/auth/presentation/cadastro_screen.dart';
+import '../../features/auth/presentation/criar_senha_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/demandas/domain/demanda.dart';
 import '../../features/demandas/presentation/demandas_list_screen.dart';
@@ -16,6 +19,9 @@ import '../../features/coordenacao/presentation/professores_screen.dart';
 
 abstract class AppRoutes {
   static const login                     = '/login';
+  static const cadastro                  = '/cadastro';
+  static const authCallback              = '/auth/callback';
+  static const criarSenha               = '/criar-senha';
   static const professorHome             = '/professor';
   static const coordenacaoDashboard      = '/coordenacao';
   static const criarDemanda              = '/coordenacao/criar';
@@ -28,21 +34,39 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.login,
     refreshListenable: goRouterAuthNotifier,
+    onException: (_, __, router) => router.go(AppRoutes.login),
+    errorBuilder: (context, state) => const LoginScreen(),
     redirect: (context, state) {
-      final autenticado = goRouterAuthNotifier.isAuthenticated;
-      final naLogin = state.matchedLocation == AppRoutes.login;
+      final autenticado  = goRouterAuthNotifier.isAuthenticated;
+      final loc          = state.matchedLocation;
+      final rotas_livres = {AppRoutes.login, AppRoutes.cadastro, AppRoutes.authCallback, AppRoutes.criarSenha};
 
-      // Não autenticado e tentando acessar rota protegida → login
-      if (!autenticado && !naLogin) return AppRoutes.login;
+      // Evento passwordRecovery capturado pelo notifier → vai direto para criar-senha
+      if (goRouterAuthNotifier.pendingRecovery &&
+          autenticado &&
+          loc != AppRoutes.criarSenha) {
+        return AppRoutes.criarSenha;
+      }
 
-      // Autenticado e na login → não redireciona aqui.
-      // A tela de login navega para a rota correta após buscar o perfil.
+      if (!autenticado && !rotas_livres.contains(loc)) return AppRoutes.login;
       return null;
     },
     routes: [
       GoRoute(
         path: AppRoutes.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.cadastro,
+        builder: (context, state) => const CadastroScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.authCallback,
+        builder: (context, state) => const AuthCallbackScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.criarSenha,
+        builder: (context, state) => const CriarSenhaScreen(),
       ),
       GoRoute(
         path: AppRoutes.professorHome,
@@ -89,6 +113,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+
+      // Rota catch-all: qualquer path desconhecido (ex: token do Supabase no
+      // fragment) redireciona para login — o SDK já processou o token da URL.
+      GoRoute(
+        path: '/:rest(.*)',
+        redirect: (_, __) => AppRoutes.login,
       ),
     ],
   );

@@ -2,7 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FlutterAuthClientOptions;
 import 'app.dart';
 import 'core/services/notification_service.dart';
 import 'core/supabase/supabase_config.dart';
@@ -18,6 +18,9 @@ void main() async {
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(
+      detectSessionInUri: false, // AuthCallbackScreen processa manualmente
+    ),
   );
 
   if (!kIsWeb) {

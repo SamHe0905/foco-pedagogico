@@ -19,8 +19,22 @@ final isAuthenticatedProvider = Provider<bool>((ref) {
 class GoRouterAuthNotifier extends ChangeNotifier {
   late final StreamSubscription<AuthState> _sub;
 
+  // Sinaliza que o próximo redirecionamento deve ir para CriarSenhaScreen
+  bool _pendingRecovery = false;
+  bool get pendingRecovery => _pendingRecovery;
+
+  void clearRecovery() {
+    _pendingRecovery = false;
+    // não notifica — será chamado dentro do próprio CriarSenhaScreen
+  }
+
   GoRouterAuthNotifier() {
-    _sub = AuthService.onAuthStateChange.listen((_) => notifyListeners());
+    _sub = AuthService.onAuthStateChange.listen((authState) {
+      if (authState.event == AuthChangeEvent.passwordRecovery) {
+        _pendingRecovery = true;
+      }
+      notifyListeners();
+    });
   }
 
   bool get isAuthenticated => AuthService.currentSession != null;
