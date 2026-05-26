@@ -7,11 +7,9 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
 }
 
-// Roles que cada nível pode convidar
 const ROLES_COORDENADOR = ['professor', 'supervisor', 'coordenacao']
 const ROLES_DIRETOR     = ['professor', 'supervisor', 'coordenacao', 'diretor', 'diretor-adjunto']
-
-const ROLES_VALIDOS = new Set(ROLES_DIRETOR)
+const ROLES_VALIDOS     = new Set(ROLES_DIRETOR)
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -30,11 +28,11 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '').trim()
     if (!token) return json({ error: 'Não autenticado.' }, 401)
 
-    let userId: string
+    let callerId: string
     try {
       const payload = token.split('.')[1]
       const claims  = JSON.parse(atob(payload))
-      userId = claims.sub as string
+      callerId = claims.sub as string
     } catch {
       return json({ error: 'Token inválido.' }, 401)
     }
@@ -43,11 +41,11 @@ serve(async (req) => {
     const { data: perfil } = await supabaseAdmin
       .from('profiles')
       .select('role')
-      .eq('id', userId)
+      .eq('id', callerId)
       .single()
 
-    const myRole     = perfil?.role as string | undefined
-    const isDirector = myRole === 'diretor' || myRole === 'diretor-adjunto'
+    const myRole        = perfil?.role as string | undefined
+    const isDirector    = myRole === 'diretor' || myRole === 'diretor-adjunto'
     const isCoordenador = myRole === 'coordenacao' || myRole === 'supervisor'
 
     if (!isDirector && !isCoordenador) {
@@ -65,7 +63,6 @@ serve(async (req) => {
     const emailNorm = (email as string).trim().toLowerCase()
     const nomeNorm  = (nome  as string).trim()
 
-    // ── Verifica se o role é válido e se quem convida tem permissão ──────────
     if (!ROLES_VALIDOS.has(roleNorm)) {
       return json({ error: `Cargo inválido: ${roleNorm}` }, 400)
     }
@@ -75,24 +72,95 @@ serve(async (req) => {
       return json({ error: 'Sem permissão para convidar este cargo.' }, 403)
     }
 
-    // ── Convida ──────────────────────────────────────────────────────────────
-    const { data: invited, error: inviteErr } =
-      await supabaseAdmin.auth.admin.inviteUserByEmail(emailNorm, {
-        data: { nome: nomeNorm, role: roleNorm },
+    // ── Cria usuário com email confirmado (sem senha ainda) ──────────────────
+    const { data: createData, error: createErr } =
+      await supabaseAdmin.auth.admin.createUser({
+        email:         emailNorm,
+        email_confirm: true,
+        user_metadata: { nome: nomeNorm, role: roleNorm },
       })
 
-    if (inviteErr) {
-      return json({ error: inviteErr.message }, 400)
+    if (createErr) {
+      const msg = createErr.message.toLowerCase()
+      if (msg.includes('already') || msg.includes('exists')) {
+        return json(
+          { error: 'Este e-mail já está cadastrado. Exclua o usuário antes de reenviar o convite.' },
+          400,
+        )
+      }
+      return json({ error: createErr.message }, 400)
     }
 
+    const newUser = createData.user
+
     // ── Garante profile com o cargo correto ──────────────────────────────────
-    if (invited.user) {
-      await supabaseAdmin
-        .from('profiles')
-        .upsert(
-          { id: invited.user.id, nome: nomeNorm, role: roleNorm },
-          { onConflict: 'id' },
-        )
+    await supabaseAdmin
+      .from('profiles')
+      .upsert(
+        { id: newUser.id, nome: nomeNorm, role: roleNorm },
+        { onConflict: 'id' },
+      )
+
+    // ── Gera link de definição de senha (recovery — mais confiável que invite) ─
+    const { data: linkData, error: linkErr } =
+      await supabaseAdmin.auth.admin.generateLink({
+        type:  'recovery',
+        email: emailNorm,
+        options: {
+          redirectTo: 'https://foco-pedagogico.vercel.app/auth/callback',
+        },
+      })
+
+    if (linkErr) {
+      return json({ error: linkErr.message }, 400)
+    }
+
+    const inviteLink = linkData.properties.action_link
+
+    // ── Envia e-mail via SendGrid API ────────────────────────────────────────
+    const sgKey = Deno.env.get('SENDGRID_API_KEY') ?? ''
+
+    const mailBody = {
+      personalizations: [{ to: [{ email: emailNorm, name: nomeNorm }] }],
+      from: { email: 'foco.pedagogico.ms@gmail.com', name: 'Foco Pedagógico' },
+      subject: 'Seu convite para o Foco Pedagógico',
+      content: [{
+        type:  'text/html',
+        value: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
+            <h2 style="color:#1565C0;">Bem-vindo ao Foco Pedagógico!</h2>
+            <p>Olá, <strong>${nomeNorm}</strong>!</p>
+            <p>Você foi convidado(a) para acessar o sistema de gestão pedagógica escolar.</p>
+            <p>Clique no botão abaixo para criar sua senha de acesso:</p>
+            <p style="text-align:center;margin:32px 0;">
+              <a href="${inviteLink}"
+                 style="background-color:#1565C0;color:#fff;padding:14px 28px;
+                        text-decoration:none;border-radius:6px;font-size:16px;">
+                Criar minha senha
+              </a>
+            </p>
+            <p style="color:#666;font-size:13px;">
+              Este link expira em 24 horas.<br>
+              Se você não esperava este convite, ignore este e-mail.
+            </p>
+          </div>
+        `,
+      }],
+    }
+
+    const sgRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sgKey}`,
+      },
+      body: JSON.stringify(mailBody),
+    })
+
+    if (!sgRes.ok) {
+      const errText = await sgRes.text()
+      console.error('SendGrid error:', errText)
+      return json({ error: `Erro ao enviar e-mail: ${errText}` }, 500)
     }
 
     return json({ success: true })
