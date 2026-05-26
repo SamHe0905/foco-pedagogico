@@ -15,44 +15,23 @@ class PwaInstallBanner extends StatefulWidget {
   State<PwaInstallBanner> createState() => _PwaInstallBannerState();
 }
 
-class _PwaInstallBannerState extends State<PwaInstallBanner>
-    with SingleTickerProviderStateMixin {
-  // Static: persiste durante a sessão (não repete após dispensar)
+class _PwaInstallBannerState extends State<PwaInstallBanner> {
   static bool _sessionDismissed = false;
 
-  // Definidos antes do build() para evitar flash de estado
   bool _showBanner = false;
   bool _isIOS      = false;
   bool _hasPrompt  = false;
-
-  late final AnimationController _anim;
-  late final Animation<Offset>   _slide;
 
   @override
   void initState() {
     super.initState();
 
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
-
     if (kIsWeb && !_sessionDismissed) {
-      // Detecta plataforma (pode ser feito em initState, JS já está disponível)
       final standalone = pwa.isStandalone();
       if (!standalone) {
-        _isIOS      = pwa.isIOS();
-        _hasPrompt  = pwa.hasInstallPrompt();
+        _isIOS     = pwa.isIOS();
+        _hasPrompt = pwa.hasInstallPrompt();
         _showBanner = true;
-
-        // Inicia a animação após o primeiro frame
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _anim.forward();
-        });
       }
     }
   }
@@ -63,42 +42,29 @@ class _PwaInstallBannerState extends State<PwaInstallBanner>
   }
 
   void _fechar() {
-    _anim.reverse().then((_) {
-      if (mounted) {
-        setState(() {
-          _sessionDismissed = true;
-          _showBanner = false;
-        });
-      }
+    setState(() {
+      _sessionDismissed = true;
+      _showBanner = false;
     });
   }
 
   @override
-  void dispose() {
-    _anim.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
       children: [
-        widget.child,
-        if (_showBanner && !_sessionDismissed)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SlideTransition(
-              position: _slide,
-              child: _BannerCard(
-                isIOS:     _isIOS,
-                hasPrompt: _hasPrompt,
-                onInstall: _instalar,
-                onDismiss: _fechar,
-              ),
-            ),
-          ),
+        Expanded(child: widget.child),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+          child: (_showBanner && !_sessionDismissed)
+              ? _BannerCard(
+                  isIOS:     _isIOS,
+                  hasPrompt: _hasPrompt,
+                  onInstall: _instalar,
+                  onDismiss: _fechar,
+                )
+              : const SizedBox.shrink(),
+        ),
       ],
     );
   }
@@ -124,25 +90,25 @@ class _BannerCard extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
         child: Material(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-          elevation: 8,
+          elevation: 6,
           shadowColor: Colors.black26,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
             child: Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.install_mobile_rounded,
-                      color: AppColors.primary, size: 24),
+                      color: AppColors.primary, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -154,7 +120,7 @@ class _BannerCard extends StatelessWidget {
                         'Adicione à tela inicial',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          fontSize: 14,
+                          fontSize: 13,
                           color: AppColors.textPrimary,
                         ),
                       ),
@@ -166,7 +132,7 @@ class _BannerCard extends StatelessWidget {
                                 ? 'Acesse mais rápido e receba notificações.'
                                 : 'No menu do navegador, escolha "Instalar app".',
                         style: const TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary),
+                            fontSize: 11, color: AppColors.textSecondary),
                         maxLines: 2,
                       ),
                     ],
@@ -179,10 +145,11 @@ class _BannerCard extends StatelessWidget {
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.primary,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                          horizontal: 10, vertical: 6),
                     ),
                     child: const Text('Instalar',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 13)),
                   ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded,
