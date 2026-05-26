@@ -30,6 +30,7 @@ abstract class AppRoutes {
   static const professores               = '/coordenacao/professores';
   static const muralDemandas             = '/coordenacao/mural';
   static const gerenciarTurmas           = '/coordenacao/turmas';
+  static const minhasDemandas            = '/coordenacao/recebidas';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -102,6 +103,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'turmas',
             builder: (context, state) => const GerenciarTurmasScreen(),
+          ),
+          GoRoute(
+            path: 'recebidas',
+            builder: (context, state) => const DemandasListScreen(),
+            routes: [
+              GoRoute(
+                path: 'demanda/:id',
+                builder: (context, state) => DemandaDetailScreen(
+                  demandaId: state.pathParameters['id']!,
+                  demanda: state.extra as Demanda?,
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: 'demanda/:id',

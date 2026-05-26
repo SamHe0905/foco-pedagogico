@@ -2,11 +2,15 @@ enum StatusDemanda { pendente, visualizada, concluida }
 
 enum PrioridadeDemanda { alta, media, baixa }
 
+enum TipoDemanda { geral, turma, individual, coordenacao }
+
 class Demanda {
   final String id;
   final String titulo;
   final String descricao;
   final String turma;
+  /// Tipo da demanda: 'geral' (todos), 'turma' (turma específica), 'individual' (professor específico)
+  final TipoDemanda tipo;
   /// Turno ao qual esta demanda pertence. Null = sem turno específico (geral/individual sem turno).
   final String? turno;
   final DateTime prazo;
@@ -19,6 +23,7 @@ class Demanda {
     required this.titulo,
     required this.descricao,
     required this.turma,
+    required this.tipo,
     this.turno,
     required this.prazo,
     required this.status,
@@ -34,6 +39,12 @@ class Demanda {
       titulo:    d['titulo']    as String,
       descricao: d['descricao'] as String? ?? '',
       turma:     d['turma']     as String,
+      tipo: switch (d['tipo'] as String?) {
+        'individual'  => TipoDemanda.individual,
+        'turma'       => TipoDemanda.turma,
+        'coordenacao' => TipoDemanda.coordenacao,
+        _             => TipoDemanda.geral,
+      },
       turno:     d['turno']     as String?,
       prazo:     DateTime.parse(d['prazo'] as String),
       prioridade: switch (d['prioridade'] as String) {
@@ -56,6 +67,7 @@ class Demanda {
       titulo:    titulo,
       descricao: descricao,
       turma:     turma,
+      tipo:      tipo,
       turno:     turno,
       prazo:     prazo,
       status:    status ?? this.status,

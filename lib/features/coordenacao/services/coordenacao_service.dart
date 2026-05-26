@@ -127,9 +127,10 @@ class CoordenacaoService {
 
   // ── Criar nova demanda ────────────────────────────────────────────────────
   //
-  // tipo = 'geral'      → atribui a todos os professores
-  // tipo = 'turma'      → atribui aos professores da turma selecionada
-  // tipo = 'individual' → atribui a um professor específico
+  // tipo = 'geral'       → atribui a todos os professores
+  // tipo = 'turma'       → atribui aos professores da turma selecionada
+  // tipo = 'individual'  → atribui a um professor específico
+  // tipo = 'coordenacao' → atribui à direção (diretor + diretor-adjunto)
 
   static Future<String> criarDemanda({
     required String   titulo,
@@ -145,10 +146,11 @@ class CoordenacaoService {
   }) async {
     // Texto de destino exibido nos cards
     final turmaDisplay = switch (tipo) {
-      'geral'      => 'Geral',
-      'turma'      => turmaNome ?? '',
-      'individual' => 'Individual',
-      _            => '',
+      'geral'       => 'Geral',
+      'turma'       => turmaNome ?? '',
+      'individual'  => 'Individual',
+      'coordenacao' => 'Coordenação',
+      _             => '',
     };
 
     // 1. Insere a demanda
@@ -187,6 +189,18 @@ class CoordenacaoService {
       case 'individual':
         // Suporta multi-select: usa professorIds se fornecido, senão professorId
         destinos = professorIds ?? (professorId != null ? [professorId] : []);
+
+      case 'coordenacao':
+        // Demanda direcionada à direção da escola
+        final rows = await _db
+            .from('profiles')
+            .select('id')
+            .inFilter('role', ['diretor', 'diretor-adjunto']);
+        // Não envia para si mesmo
+        destinos = (rows as List)
+            .map((r) => r['id'] as String)
+            .where((id) => id != _userId)
+            .toList();
 
       default:
         destinos = [];
@@ -287,15 +301,32 @@ class CoordenacaoService {
   }
 
   // Altera o cargo (role) de um membro da equipe via Edge Function (service role).
-  static Future<void> alterarCargo(String userId, String novoRole) async {
-    final res = await _db.functions.invoke(
-      'alterar-cargo',
-      body: {'userId': userId, 'novoRole': novoRole},
-    );
+  //
+  // [novoRoleSecundario]:
+  //   - omitido → não mexe no role_secundario atual
+  //   - null    → limpa o role_secundario (remove duplo acesso)
+  //   - string  → define o role_secundario (deve ser diferente do principal)
+  static Future<void> alterarCargo(
+    String userId,
+    String novoRole, {
+    Object? novoRoleSecundario = _sentinel,
+  }) async {
+    final body = <String, dynamic>{
+      'userId':   userId,
+      'novoRole': novoRole,
+    };
+    if (!identical(novoRoleSecundario, _sentinel)) {
+      body['novoRoleSecundario'] = novoRoleSecundario; // pode ser null
+    }
+
+    final res = await _db.functions.invoke('alterar-cargo', body: body);
     if (res.status != 200) {
       throw Exception(res.data?['error'] ?? 'Erro ao alterar cargo.');
     }
   }
+
+  // Sentinela para distinguir "parâmetro não passado" de "parâmetro = null"
+  static const _sentinel = Object();
 
   static Future<void> toggleAtivoProfessor(String professorId, {required bool ativo}) async {
     await _db.from('professor_status').upsert({
@@ -386,7 +417,21 @@ class CoordenacaoService {
   // ── Excluir demanda ───────────────────────────────────────────────────────
 
   static Future<void> excluirDemanda(String demandaId) async {
-    // 1. Busca os storage_paths dos anexos para remover do bucket
+    // 1. Valida permissão: só quem criou pode apagar
+    final demanda = await _db
+        .from('demandas')
+        .select('criada_por')
+        .eq('id', demandaId)
+        .maybeSingle();
+
+    if (demanda == null) {
+      throw Exception('Demanda não encontrada.');
+    }
+    if (demanda['criada_por'] != _userId) {
+      throw Exception('Apenas o criador da demanda pode removê-la.');
+    }
+
+    // 2. Anexos do storage
     final anexosRaw = await _db
         .from('demanda_anexos')
         .select('storage_path')
@@ -400,15 +445,15 @@ class CoordenacaoService {
       await _db.storage.from(_bucket).remove(paths);
     }
 
-    // 2. Remove os registros da tabela (independente de CASCADE no FK)
+    // 3. Remove atribuições aos professores
+    //    (sem isso, a demanda continua aparecendo na lista deles)
+    await _db.from('demanda_professor').delete().eq('demanda_id', demandaId);
+
+    // 4. Remove registros de anexos
     await _db.from('demanda_anexos').delete().eq('demanda_id', demandaId);
 
-    // 3. Exclui a demanda
-    await _db
-        .from('demandas')
-        .delete()
-        .eq('id', demandaId)
-        .eq('criada_por', _userId);
+    // 5. Exclui a demanda em si
+    await _db.from('demandas').delete().eq('id', demandaId);
   }
 
   // ── Professores com pendências (visão agregada para o dashboard) ─────────
@@ -527,7 +572,7 @@ class CoordenacaoService {
     await _db.storage.from(_bucket).uploadBinary(
           path,
           bytes,
-          fileOptions: const FileOptions(contentType: 'application/pdf'),
+          fileOptions: FileOptions(contentType: _contentTypeFor(nome)),
         );
 
     final url = _db.storage.from(_bucket).getPublicUrl(path);
@@ -550,6 +595,18 @@ class CoordenacaoService {
 
   static String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Retorna o MIME type apropriado baseado na extensão do arquivo.
+  static String _contentTypeFor(String filename) {
+    final ext = filename.toLowerCase().split('.').last;
+    return switch (ext) {
+      'pdf'  => 'application/pdf',
+      'doc'  => 'application/msword',
+      'docx' =>
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      _      => 'application/octet-stream',
+    };
+  }
 
   /// Remove espaços, acentos e caracteres especiais do nome do arquivo
   /// para garantir compatibilidade com o Supabase Storage.

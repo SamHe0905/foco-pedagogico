@@ -460,45 +460,120 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
         ref.read(currentUserProvider).valueOrNull?.role.isDirector ?? false;
     final opcoes =
         isDirector ? _rolesParaDiretor : _rolesParaCoordenador;
-    String roleSelecionada = widget.membro.role;
 
-    final novoRole = await showDialog<String>(
+    String  rolePrincipal  = widget.membro.role;
+    String? roleSecundario = widget.membro.roleSecundario;
+
+    final resultado = await showDialog<(String, String?)>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => AlertDialog(
-          title: Text('Cargo de ${widget.membro.nome}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: opcoes.map((opt) {
-              final (value, label) = opt;
-              return RadioListTile<String>(
-                value: value,
-                groupValue: roleSelecionada,
-                title: Text(label),
-                contentPadding: EdgeInsets.zero,
-                onChanged: (v) => setDialog(() => roleSelecionada = v!),
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
+        builder: (ctx, setDialog) {
+          // Cargo secundário não pode ser igual ao principal
+          if (roleSecundario == rolePrincipal) {
+            roleSecundario = null;
+          }
+          return AlertDialog(
+            title: Text('Cargo de ${widget.membro.nome}'),
+            content: SizedBox(
+              width: 360,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Cargo principal ─────────────────────────────────
+                    Text(
+                      'Cargo principal',
+                      style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    ...opcoes.map((opt) {
+                      final (value, label) = opt;
+                      return RadioListTile<String>(
+                        value: value,
+                        groupValue: rolePrincipal,
+                        title: Text(label),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        onChanged: (v) => setDialog(() => rolePrincipal = v!),
+                      );
+                    }),
+
+                    const SizedBox(height: 8),
+                    const Divider(),
+                    const SizedBox(height: 8),
+
+                    // ── Cargo secundário ────────────────────────────────
+                    Text(
+                      'Cargo secundário',
+                      style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                    ),
+                    Text(
+                      'Permite ao usuário alternar entre dois papéis (opcional).',
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    RadioListTile<String?>(
+                      value: null,
+                      groupValue: roleSecundario,
+                      title: const Text('Nenhum'),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      onChanged: (v) => setDialog(() => roleSecundario = v),
+                    ),
+                    ...opcoes.where((o) => o.$1 != rolePrincipal).map((opt) {
+                      final (value, label) = opt;
+                      return RadioListTile<String?>(
+                        value: value,
+                        groupValue: roleSecundario,
+                        title: Text(label),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        onChanged: (v) => setDialog(() => roleSecundario = v),
+                      );
+                    }),
+                  ],
+                ),
+              ),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, roleSelecionada),
-              child: const Text('Salvar'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(ctx, (rolePrincipal, roleSecundario)),
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
       ),
     );
 
-    if (novoRole == null || novoRole == widget.membro.role || !mounted) return;
+    if (resultado == null || !mounted) return;
+
+    final (novoRole, novoRoleSecundario) = resultado;
+    final mudouPrincipal  = novoRole != widget.membro.role;
+    final mudouSecundario = novoRoleSecundario != widget.membro.roleSecundario;
+    if (!mudouPrincipal && !mudouSecundario) return;
 
     setState(() => _salvando = true);
     try {
-      await CoordenacaoService.alterarCargo(widget.membro.id, novoRole);
+      await CoordenacaoService.alterarCargo(
+        widget.membro.id,
+        novoRole,
+        novoRoleSecundario: novoRoleSecundario, // null = remove duplo acesso
+      );
       widget.ref.invalidate(professoresPerfisProvider);
       if (mounted) {
         Navigator.of(context).pop();
@@ -512,8 +587,10 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erro ao alterar cargo.'),
+          SnackBar(
+            content: Text(
+              e.toString().replaceAll('Exception: ', ''),
+            ),
             backgroundColor: AppColors.error,
           ),
         );

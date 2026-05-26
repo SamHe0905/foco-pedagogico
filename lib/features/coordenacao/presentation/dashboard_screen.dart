@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/pwa_install_banner.dart';
 import '../../../shared/widgets/saudacao_header.dart';
+import '../../auth/domain/usuario.dart';
 import '../../auth/presentation/auth_providers.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/coordenacao_service.dart';
@@ -144,32 +145,42 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   final userAsync = ref.watch(currentUserProvider);
                   return userAsync.maybeWhen(
                     data: (user) {
-                      if (user == null || !user.temDuploAcesso) {
+                      if (user == null ||
+                          !user.temDuploAcesso ||
+                          user.roleSecundario == null) {
                         return const SizedBox.shrink();
                       }
                       final isSecundary = ref.watch(viewAsSecundaryProvider);
+                      // O cargo "alternativo" (oposto do que está sendo visto)
+                      final outroRole =
+                          isSecundary ? user.role : user.roleSecundario!;
                       return IconButton(
                         icon: Icon(
-                          isSecundary
-                              ? Icons.swap_horiz_rounded
+                          outroRole.isDashboard
+                              ? Icons.admin_panel_settings_rounded
                               : Icons.school_rounded,
                           color: isSecundary ? AppColors.secondary : null,
                         ),
-                        tooltip: isSecundary
-                            ? 'Voltar para Coordenação'
-                            : 'Ver como Professor',
+                        tooltip: 'Ver como ${outroRole.cargo}',
                         onPressed: () {
                           final novo = !isSecundary;
-                          ref.read(viewAsSecundaryProvider.notifier).state = novo;
-                          if (novo && user.roleSecundario != null) {
-                            context.go(homeRouteFor(user.roleSecundario!));
-                          }
+                          ref.read(viewAsSecundaryProvider.notifier).state =
+                              novo;
+                          final destinoRole =
+                              novo ? user.roleSecundario! : user.role;
+                          context.go(homeRouteFor(destinoRole));
                         },
                       );
                     },
                     orElse: () => const SizedBox.shrink(),
                   );
                 }),
+                // Demandas recebidas (caixa de entrada da gestão)
+                IconButton(
+                  icon: const Icon(Icons.inbox_rounded),
+                  tooltip: 'Minhas demandas recebidas',
+                  onPressed: () => context.push(AppRoutes.minhasDemandas),
+                ),
                 // Mural de demandas gerais
                 IconButton(
                   icon: const Icon(Icons.dashboard_rounded),

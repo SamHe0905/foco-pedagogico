@@ -53,7 +53,8 @@ serve(async (req) => {
     }
 
     // ── Lê body ──────────────────────────────────────────────────────────────
-    const { userId, novoRole } = await req.json()
+    const body = await req.json()
+    const { userId, novoRole } = body
 
     if (!userId || !novoRole) {
       return json({ error: 'userId e novoRole são obrigatórios.' }, 400)
@@ -85,10 +86,31 @@ serve(async (req) => {
       }
     }
 
+    // ── Monta update ─────────────────────────────────────────────────────────
+    const updateData: Record<string, unknown> = { role: roleNorm }
+
+    // role_secundario é opcional. Se a chave veio no body (mesmo como null/""),
+    // atualizamos: string vazia ou null = limpar; string válida = setar.
+    if ('novoRoleSecundario' in body) {
+      const raw = body.novoRoleSecundario
+      if (raw === null || raw === '' || raw === undefined) {
+        updateData.role_secundario = null
+      } else {
+        const secNorm = String(raw).trim().toLowerCase()
+        if (!rolesPermitidos.has(secNorm)) {
+          return json({ error: 'Sem permissão para atribuir este cargo secundário.' }, 403)
+        }
+        if (secNorm === roleNorm) {
+          return json({ error: 'O cargo secundário deve ser diferente do principal.' }, 400)
+        }
+        updateData.role_secundario = secNorm
+      }
+    }
+
     // ── Aplica a alteração ───────────────────────────────────────────────────
     const { error: updateErr } = await supabaseAdmin
       .from('profiles')
-      .update({ role: roleNorm })
+      .update(updateData)
       .eq('id', userId)
 
     if (updateErr) return json({ error: updateErr.message }, 400)

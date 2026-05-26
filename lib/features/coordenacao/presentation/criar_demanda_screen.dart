@@ -46,10 +46,10 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
     return true;
   }
 
-  Future<void> _adicionarPdf() async {
+  Future<void> _adicionarArquivo() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      allowedExtensions: ['pdf', 'doc', 'docx'],
       withData: true,
       allowMultiple: true,
     );
@@ -74,7 +74,7 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '$rejeitados arquivo(s) ignorado(s): limite de $limiteMb MB por PDF.',
+            '$rejeitados arquivo(s) ignorado(s): limite de $limiteMb MB por arquivo.',
           ),
           backgroundColor: AppColors.error,
         ),
@@ -119,10 +119,11 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
         prioridade:   _prioridade,
         turmaId:      _turmaSelecionada?.id,
         turmaNome:    _turmaSelecionada?.nome,
+        turnoFiltro:  _turmaSelecionada?.turno.dbValue,
         professorId:  _professorSelecionado?.id,
       );
 
-      // Upload dos PDFs selecionados (se houver)
+      // Upload dos arquivos selecionados (se houver)
       for (final arquivo in _arquivos) {
         if (arquivo.bytes != null) {
           await CoordenacaoService.uploadAnexo(
@@ -144,9 +145,10 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao enviar. Tente novamente.'),
+        SnackBar(
+          content: Text('Erro ao enviar: $e'),
           backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 8),
         ),
       );
     } finally {
@@ -312,7 +314,40 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
                     ),
                   ],
 
-                  // ── Anexos (PDFs opcionais) ────────────────────────────
+                  if (_tipo == 'coordenacao') ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.admin_panel_settings_rounded,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Esta demanda será enviada para a direção '
+                              '(diretor e diretor-adjunto).',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Anexos (PDFs / Word opcionais) ─────────────────────
                   const SizedBox(height: 24),
                   const Divider(),
                   const SizedBox(height: 16),
@@ -327,9 +362,9 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
                       ),
                       const Spacer(),
                       TextButton.icon(
-                        onPressed: _enviando ? null : _adicionarPdf,
+                        onPressed: _enviando ? null : _adicionarArquivo,
                         icon: const Icon(Icons.upload_file_rounded, size: 16),
-                        label: const Text('Adicionar PDF'),
+                        label: const Text('Adicionar arquivo'),
                         style: TextButton.styleFrom(
                           foregroundColor: AppColors.primary,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -460,9 +495,10 @@ class _TipoSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const options = [
-      ('geral',      Icons.groups_rounded,       'Geral'),
-      ('turma',      Icons.class_rounded,         'Por Turma'),
-      ('individual', Icons.person_rounded,        'Individual'),
+      ('geral',       Icons.groups_rounded,            'Geral'),
+      ('turma',       Icons.class_rounded,             'Turma'),
+      ('individual',  Icons.person_rounded,            'Individual'),
+      ('coordenacao', Icons.admin_panel_settings_rounded, 'Coordenação'),
     ];
 
     return Row(
@@ -476,7 +512,7 @@ class _TipoSelector extends StatelessWidget {
               onTap: () => onChanged(valor),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                 decoration: BoxDecoration(
                   color: ativo
                       ? AppColors.primary.withValues(alpha: 0.1)
@@ -498,7 +534,7 @@ class _TipoSelector extends StatelessWidget {
                     Text(
                       label,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11.5,
                         fontWeight:
                             ativo ? FontWeight.w600 : FontWeight.w400,
                         color: ativo
@@ -506,6 +542,8 @@ class _TipoSelector extends StatelessWidget {
                             : AppColors.textSecondary,
                       ),
                       textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

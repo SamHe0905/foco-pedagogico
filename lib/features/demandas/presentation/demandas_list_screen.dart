@@ -11,6 +11,22 @@ import '../../auth/services/auth_service.dart';
 import '../domain/demanda.dart';
 import 'demandas_providers.dart';
 
+/// Regras de filtragem por turno:
+/// - `filtroTurno == null` (aba "Todos") → mostra todas as demandas do professor.
+/// - `filtroTurno == "matutino"` (ou outro) → mostra:
+///     • Demandas explicitamente daquele turno
+///     • Demandas gerais (para todos) — porque valem para qualquer turno
+///   Demandas individuais (que vêm sem turno) NÃO aparecem em filtros de turno —
+///   só na aba "Todos", para evitar duplicação e dar significado real ao filtro.
+List<Demanda> _filtrarPorTurno(List<Demanda> demandas, String? filtroTurno) {
+  if (filtroTurno == null) return demandas;
+  return demandas.where((d) {
+    if (d.turno == filtroTurno) return true;
+    if (d.tipo == TipoDemanda.geral) return true;
+    return false;
+  }).toList();
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 class DemandasListScreen extends ConsumerWidget {
@@ -44,20 +60,29 @@ class DemandasListScreen extends ConsumerWidget {
             final userAsync = r.watch(currentUserProvider);
             return userAsync.maybeWhen(
               data: (user) {
-                if (user == null || !user.temDuploAcesso) {
+                if (user == null ||
+                    !user.temDuploAcesso ||
+                    user.roleSecundario == null) {
                   return const SizedBox.shrink();
                 }
+                final isSecundary = r.watch(viewAsSecundaryProvider);
+                // Cargo "alternativo" — o que está NÃO sendo visto agora
+                final outroRole =
+                    isSecundary ? user.role : user.roleSecundario!;
                 return IconButton(
-                  icon: const Icon(Icons.swap_horiz_rounded),
-                  tooltip: 'Ver como Coordenação',
+                  icon: Icon(
+                    outroRole.isDashboard
+                        ? Icons.admin_panel_settings_rounded
+                        : Icons.school_rounded,
+                    color: isSecundary ? AppColors.secondary : null,
+                  ),
+                  tooltip: 'Ver como ${outroRole.cargo}',
                   onPressed: () {
-                    r.read(viewAsSecundaryProvider.notifier).state = false;
-                    if (user.roleSecundario != null &&
-                        user.roleSecundario!.isDashboard) {
-                      context.go(homeRouteFor(user.roleSecundario!));
-                    } else if (user.role.isDashboard) {
-                      context.go(homeRouteFor(user.role));
-                    }
+                    final novo = !isSecundary;
+                    r.read(viewAsSecundaryProvider.notifier).state = novo;
+                    final destinoRole =
+                        novo ? user.roleSecundario! : user.role;
+                    context.go(homeRouteFor(destinoRole));
                   },
                 );
               },
@@ -86,10 +111,7 @@ class DemandasListScreen extends ConsumerWidget {
               // ── Filtro de status ───────────────────────────────────────────
               async.when(
                 data: (demandas) {
-                  final porTurno = filtroTurno == null
-                      ? demandas
-                      : demandas.where((d) =>
-                          d.turno == null || d.turno == filtroTurno).toList();
+                  final porTurno = _filtrarPorTurno(demandas, filtroTurno);
                   return _FilterBar(demandas: porTurno);
                 },
                 loading: () => const SizedBox.shrink(),
@@ -104,11 +126,8 @@ class DemandasListScreen extends ConsumerWidget {
                     onRetry: () => ref.invalidate(demandasProvider),
                   ),
                   data: (demandas) {
-                    // Aplica filtro de turno: null = todas; status dentro do turno
-                    var filtradas = filtroTurno == null
-                        ? demandas
-                        : demandas.where((d) =>
-                            d.turno == null || d.turno == filtroTurno).toList();
+                    // Aplica filtro de turno (regras em _filtrarPorTurno)
+                    var filtradas = _filtrarPorTurno(demandas, filtroTurno);
                     if (filtro != null) {
                       filtradas = filtradas
                           .where((d) => d.status == filtro)
@@ -291,10 +310,30 @@ class _DemandaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final concluida = demanda.status == StatusDemanda.concluida;
+    final isIndividual = demanda.tipo == TipoDemanda.individual;
 
     return Card(
+      // Destaque sutil para demandas individuais
+      color: isIndividual
+          ? AppColors.primary.withValues(alpha: 0.05)
+          : null,
+      shape: isIndividual
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.30),
+                width: 1.2,
+              ),
+            )
+          : null,
       child: InkWell(
-        onTap: () => context.push('/professor/demanda/${demanda.id}', extra: demanda),
+        // Caminho relativo: se está em /professor → /professor/demanda/X,
+        // se está em /coordenacao/recebidas → /coordenacao/recebidas/demanda/X.
+        // Mantém o "voltar" coerente com a tela de origem.
+        onTap: () => context.push(
+          'demanda/${demanda.id}',
+          extra: demanda,
+        ),
         borderRadius: BorderRadius.circular(16),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
@@ -344,7 +383,10 @@ class _DemandaCard extends StatelessWidget {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            _TurmaChip(turma: demanda.turma),
+                            _TurmaChip(
+                              turma: demanda.turma,
+                              isIndividual: isIndividual,
+                            ),
                             const Spacer(),
                             _PrazoLabel(demanda: demanda),
                           ],
@@ -421,23 +463,38 @@ class _StatusBadge extends StatelessWidget {
 
 class _TurmaChip extends StatelessWidget {
   final String turma;
-  const _TurmaChip({required this.turma});
+  final bool isIndividual;
+  const _TurmaChip({required this.turma, this.isIndividual = false});
 
   @override
   Widget build(BuildContext context) {
+    final fg = isIndividual ? AppColors.primary : AppColors.textSecondary;
+    final bg = isIndividual
+        ? AppColors.primary.withValues(alpha: 0.12)
+        : AppColors.surfaceVariant;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
+        color: bg,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
-        turma,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textSecondary,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isIndividual) ...[
+            Icon(Icons.person_rounded, size: 12, color: fg),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            turma,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isIndividual ? FontWeight.w600 : FontWeight.w500,
+              color: fg,
+            ),
+          ),
+        ],
       ),
     );
   }

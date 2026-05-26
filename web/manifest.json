@@ -1,11 +1,11 @@
 {
-    "name": "foco_pedagogico",
-    "short_name": "foco_pedagogico",
+    "name": "Foco Pedagógico",
+    "short_name": "Foco Pedagógico",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#FFFFFF",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Sistema de demandas pedagógicas escolares.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

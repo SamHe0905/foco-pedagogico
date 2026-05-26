@@ -29,7 +29,7 @@ class _AnexosSectionState extends ConsumerState<AnexosSection> {
   Future<void> _pickAndUpload() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      allowedExtensions: ['pdf', 'doc', 'docx'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
@@ -109,7 +109,7 @@ class _AnexosSectionState extends ConsumerState<AnexosSection> {
                       : TextButton.icon(
                           onPressed: _pickAndUpload,
                           icon: const Icon(Icons.upload_file_rounded, size: 16),
-                          label: const Text('Anexar PDF'),
+                          label: const Text('Anexar arquivo'),
                           style: TextButton.styleFrom(
                             foregroundColor: AppColors.primary,
                             padding:
@@ -179,8 +179,19 @@ class _AnexoTile extends StatelessWidget {
     }
   }
 
+  /// Retorna (ícone, cor) baseado na extensão do arquivo
+  (IconData, Color) _iconForFile(String nome) {
+    final ext = nome.toLowerCase().split('.').last;
+    return switch (ext) {
+      'pdf'         => (Icons.picture_as_pdf_rounded,    const Color(0xFFE53935)),
+      'doc' || 'docx' => (Icons.description_rounded,     const Color(0xFF1976D2)),
+      _             => (Icons.insert_drive_file_rounded, AppColors.textSecondary),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
+    final (icon, iconColor) = _iconForFile(anexo.nome);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
@@ -191,8 +202,7 @@ class _AnexoTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.picture_as_pdf_rounded,
-              color: Color(0xFFE53935), size: 26),
+          Icon(icon, color: iconColor, size: 26),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

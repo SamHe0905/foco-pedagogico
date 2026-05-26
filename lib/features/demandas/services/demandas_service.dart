@@ -8,7 +8,7 @@ class DemandasService {
   static String get _userId => _auth.currentUser!.id;
 
   static const _select =
-      'status, demandas(id, titulo, descricao, turma, turno, prazo, prioridade, criada_em)';
+      'status, demandas(id, titulo, descricao, turma, tipo, turno, prazo, prioridade, criada_em)';
 
   /// Retorna os turnos distintos das turmas deste professor.
   static Future<List<String>> getTurnosDoProfessor() async {

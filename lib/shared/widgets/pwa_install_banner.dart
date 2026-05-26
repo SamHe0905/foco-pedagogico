@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
@@ -34,6 +35,16 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
         _isAndroid  = pwa.isAndroid();
         _hasPrompt  = pwa.hasInstallPrompt();
         _showBanner = true;
+
+        // Solicita permissão de notificação após um pequeno delay
+        Future.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
+          await FirebaseMessaging.instance.requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+        });
       }
     }
   }
