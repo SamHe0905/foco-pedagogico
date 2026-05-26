@@ -3,5 +3,6 @@
 
 bool isStandalone()      => false;
 bool isIOS()             => false;
+bool isAndroid()         => false;
 bool hasInstallPrompt()  => false;
 void triggerInstall()    {}

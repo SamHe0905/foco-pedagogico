@@ -26,6 +26,15 @@ bool isIOS() {
   }
 }
 
+bool isAndroid() {
+  try {
+    final ua = (js.context['navigator']['userAgent'] as String? ?? '').toLowerCase();
+    return ua.contains('android');
+  } catch (_) {
+    return false;
+  }
+}
+
 bool hasInstallPrompt() {
   try {
     return js.context['deferredInstallPrompt'] != null;

@@ -20,6 +20,7 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
 
   bool _showBanner = false;
   bool _isIOS      = false;
+  bool _isAndroid  = false;
   bool _hasPrompt  = false;
 
   @override
@@ -29,8 +30,9 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
     if (kIsWeb && !_sessionDismissed) {
       final standalone = pwa.isStandalone();
       if (!standalone) {
-        _isIOS     = pwa.isIOS();
-        _hasPrompt = pwa.hasInstallPrompt();
+        _isIOS      = pwa.isIOS();
+        _isAndroid  = pwa.isAndroid();
+        _hasPrompt  = pwa.hasInstallPrompt();
         _showBanner = true;
       }
     }
@@ -59,6 +61,7 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
           child: (_showBanner && !_sessionDismissed)
               ? _BannerCard(
                   isIOS:     _isIOS,
+                  isAndroid: _isAndroid,
                   hasPrompt: _hasPrompt,
                   onInstall: _instalar,
                   onDismiss: _fechar,
@@ -74,12 +77,14 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
 
 class _BannerCard extends StatelessWidget {
   final bool isIOS;
+  final bool isAndroid;
   final bool hasPrompt;
   final VoidCallback onInstall;
   final VoidCallback onDismiss;
 
   const _BannerCard({
     required this.isIOS,
+    required this.isAndroid,
     required this.hasPrompt,
     required this.onInstall,
     required this.onDismiss,
@@ -128,9 +133,11 @@ class _BannerCard extends StatelessWidget {
                       Text(
                         isIOS
                             ? 'Toque em Compartilhar ↑ → "Adicionar à Tela de Início".'
-                            : hasPrompt
-                                ? 'Acesse mais rápido e receba notificações.'
-                                : 'No menu do navegador, escolha "Instalar app".',
+                            : isAndroid && !hasPrompt
+                                ? 'Toque nos 3 pontos ⋮ → "Adicionar à tela inicial".'
+                                : hasPrompt
+                                    ? 'Acesse mais rápido e receba notificações.'
+                                    : 'No menu do navegador, escolha "Instalar app".',
                         style: const TextStyle(
                             fontSize: 11, color: AppColors.textSecondary),
                         maxLines: 2,
