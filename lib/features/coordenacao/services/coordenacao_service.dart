@@ -519,8 +519,10 @@ class CoordenacaoService {
 
   static Future<void> uploadAnexo(
       String demandaId, String nome, Uint8List bytes) async {
+    // Supabase Storage rejeita espaços e caracteres especiais no path
+    final safeName = _sanitizeFileName(nome);
     final path =
-        '$demandaId/${DateTime.now().millisecondsSinceEpoch}_$nome';
+        '$demandaId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
     await _db.storage.from(_bucket).uploadBinary(
           path,
@@ -548,4 +550,33 @@ class CoordenacaoService {
 
   static String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Remove espaços, acentos e caracteres especiais do nome do arquivo
+  /// para garantir compatibilidade com o Supabase Storage.
+  static String _sanitizeFileName(String nome) {
+    const acentos = {
+      'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
+      'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+      'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+      'ó': 'o', 'ò': 'o', 'õ': 'o', 'ô': 'o', 'ö': 'o',
+      'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+      'ç': 'c', 'ñ': 'n',
+      'Á': 'A', 'À': 'A', 'Ã': 'A', 'Â': 'A', 'Ä': 'A',
+      'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+      'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
+      'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
+      'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+      'Ç': 'C', 'Ñ': 'N',
+    };
+
+    var resultado = nome;
+    acentos.forEach((acento, substituto) {
+      resultado = resultado.replaceAll(acento, substituto);
+    });
+
+    // Substitui espaços por underscore e remove outros caracteres inválidos
+    return resultado
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^\w\-.]'), '');
+  }
 }
