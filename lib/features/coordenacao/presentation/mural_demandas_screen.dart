@@ -70,10 +70,7 @@ class MuralDemandasScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             color: AppColors.primary,
-            onRefresh: () async {
-              // ignore: unused_result
-              ref.refresh(todasDemandasProvider);
-            },
+            onRefresh: () => ref.refresh(todasDemandasProvider.future),
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),

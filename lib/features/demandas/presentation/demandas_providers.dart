@@ -20,6 +20,14 @@ final turnosProfessorProvider = FutureProvider<List<String>>((ref) {
   return DemandasService.getTurnosDoProfessor();
 });
 
+/// Conta quantas demandas estão pendentes para o usuário logado.
+/// Usado para exibir o badge no ícone de "Minhas demandas recebidas" no dashboard.
+final demandasPendentesCountProvider = FutureProvider<int>((ref) {
+  final session = ref.watch(sessionProvider).valueOrNull;
+  if (session == null) return Future.value(0);
+  return DemandasService.getContadorPendentes();
+});
+
 /// Stream de mensagens FCM com o app em foreground.
 /// Usado pela DemandasListScreen para atualizar a lista automaticamente.
 final fcmForegroundProvider = StreamProvider<RemoteMessage>((ref) {
