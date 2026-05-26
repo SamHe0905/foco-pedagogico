@@ -60,11 +60,9 @@ class _PwaInstallBannerState extends State<PwaInstallBanner>
     _isIOS     = pwa.isIOS();
     _hasPrompt = pwa.hasInstallPrompt();
 
-    // Exibe somente se puder instalar ou for iOS (com instrução manual)
-    if (_hasPrompt || _isIOS) {
-      setState(() => _showBanner = true);
-      _anim.forward();
-    }
+    // Mostra sempre que não estiver instalado
+    setState(() => _showBanner = true);
+    _anim.forward();
   }
 
   void _instalar() {
@@ -175,7 +173,9 @@ class _BannerCard extends StatelessWidget {
                       Text(
                         isIOS
                             ? 'Toque em Compartilhar ↑ → "Adicionar à Tela de Início".'
-                            : 'Acesse mais rápido e receba notificações em tempo real.',
+                            : hasPrompt
+                                ? 'Acesse mais rápido e receba notificações em tempo real.'
+                                : 'No menu do navegador, escolha "Instalar app" ou "Adicionar à tela inicial".',
                         style: const TextStyle(
                             fontSize: 12, color: AppColors.textSecondary),
                         maxLines: 2,
