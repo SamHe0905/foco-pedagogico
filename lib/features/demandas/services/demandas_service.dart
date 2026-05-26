@@ -70,18 +70,6 @@ class DemandasService {
         .eq('professor_id', _userId);
   }
 
-  // ── Conta demandas pendentes (para badge no ícone da gestão) ─────────────
-
-  static Future<int> getContadorPendentes() async {
-    final data = await _db
-        .from('demanda_professor')
-        .select('status')
-        .eq('professor_id', _userId)
-        .eq('status', 'pendente');
-
-    return (data as List).length;
-  }
-
   // ── Ordenação: prioridade alta → média → baixa, depois prazo ─────────────
 
   static List<Demanda> _sorted(List<Demanda> lista) {

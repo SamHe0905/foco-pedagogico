@@ -309,23 +309,19 @@ class _DemandaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final concluida    = demanda.status == StatusDemanda.concluida;
+    final concluida = demanda.status == StatusDemanda.concluida;
     final isIndividual = demanda.tipo == TipoDemanda.individual;
-    final isGestao     = demanda.tipo == TipoDemanda.coordenacao;
-
-    // Cor de destaque do card conforme tipo
-    final accentColor = isGestao ? AppColors.secondary : AppColors.primary;
 
     return Card(
-      // Destaque sutil para demandas individuais e de gestão
-      color: (isIndividual || isGestao)
-          ? accentColor.withValues(alpha: 0.05)
+      // Destaque sutil para demandas individuais
+      color: isIndividual
+          ? AppColors.primary.withValues(alpha: 0.05)
           : null,
-      shape: (isIndividual || isGestao)
+      shape: isIndividual
           ? RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
-                color: accentColor.withValues(alpha: 0.30),
+                color: AppColors.primary.withValues(alpha: 0.30),
                 width: 1.2,
               ),
             )
@@ -390,7 +386,6 @@ class _DemandaCard extends StatelessWidget {
                             _TurmaChip(
                               turma: demanda.turma,
                               isIndividual: isIndividual,
-                              isGestao: isGestao,
                             ),
                             const Spacer(),
                             _PrazoLabel(demanda: demanda),
@@ -469,37 +464,14 @@ class _StatusBadge extends StatelessWidget {
 class _TurmaChip extends StatelessWidget {
   final String turma;
   final bool isIndividual;
-  final bool isGestao;
-  const _TurmaChip({
-    required this.turma,
-    this.isIndividual = false,
-    this.isGestao = false,
-  });
+  const _TurmaChip({required this.turma, this.isIndividual = false});
 
   @override
   Widget build(BuildContext context) {
-    // Gestão tem precedência visual sobre Individual se ambos estiverem ativos
-    final Color fg;
-    final Color bg;
-    final IconData? icon;
-    final String label;
-
-    if (isGestao) {
-      fg    = AppColors.secondary;
-      bg    = AppColors.secondary.withValues(alpha: 0.12);
-      icon  = Icons.admin_panel_settings_rounded;
-      label = 'Gestão';
-    } else if (isIndividual) {
-      fg    = AppColors.primary;
-      bg    = AppColors.primary.withValues(alpha: 0.12);
-      icon  = Icons.person_rounded;
-      label = turma;
-    } else {
-      fg    = AppColors.textSecondary;
-      bg    = AppColors.surfaceVariant;
-      icon  = null;
-      label = turma;
-    }
+    final fg = isIndividual ? AppColors.primary : AppColors.textSecondary;
+    final bg = isIndividual
+        ? AppColors.primary.withValues(alpha: 0.12)
+        : AppColors.surfaceVariant;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -510,15 +482,15 @@ class _TurmaChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: fg),
+          if (isIndividual) ...[
+            Icon(Icons.person_rounded, size: 12, color: fg),
             const SizedBox(width: 4),
           ],
           Text(
-            label,
+            turma,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: (isIndividual || isGestao) ? FontWeight.w600 : FontWeight.w500,
+              fontWeight: isIndividual ? FontWeight.w600 : FontWeight.w500,
               color: fg,
             ),
           ),

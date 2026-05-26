@@ -10,7 +10,6 @@ import '../../auth/presentation/auth_providers.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/coordenacao_service.dart';
 import '../../demandas/domain/demanda.dart';
-import '../../demandas/presentation/demandas_providers.dart';
 import '../domain/demanda_resumo.dart';
 import '../domain/professor_pendencias.dart';
 import 'coordenacao_providers.dart';
@@ -176,25 +175,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     orElse: () => const SizedBox.shrink(),
                   );
                 }),
-                // Demandas recebidas (caixa de entrada da gestão) — com badge
-                Consumer(builder: (ctx, r, _) {
-                  final count = r.watch(demandasPendentesCountProvider).valueOrNull ?? 0;
-                  return IconButton(
-                    icon: Badge(
-                      isLabelVisible: count > 0,
-                      label: Text(count > 99 ? '99+' : '$count'),
-                      backgroundColor: AppColors.error,
-                      textColor: Colors.white,
-                      child: const Icon(Icons.inbox_rounded),
-                    ),
-                    tooltip: 'Minhas demandas recebidas${count > 0 ? ' ($count pendentes)' : ''}',
-                    onPressed: () async {
-                      await context.push(AppRoutes.minhasDemandas);
-                      // Atualiza o badge ao voltar da tela de recebidas
-                      r.invalidate(demandasPendentesCountProvider);
-                    },
-                  );
-                }),
+                // Demandas recebidas (caixa de entrada da gestão)
+                IconButton(
+                  icon: const Icon(Icons.inbox_rounded),
+                  tooltip: 'Minhas demandas recebidas',
+                  onPressed: () => context.push(AppRoutes.minhasDemandas),
+                ),
                 // Mural de demandas gerais
                 IconButton(
                   icon: const Icon(Icons.dashboard_rounded),

@@ -53,30 +53,17 @@ class _DemandaDetailScreenState extends ConsumerState<DemandaDetailScreen> {
     if (!mounted) return;
     setState(() => _demanda = _demanda?.copyWith(status: StatusDemanda.visualizada));
     ref.invalidate(demandasProvider);
-    // Atualiza o badge de pendentes no dashboard da gestão
-    ref.invalidate(demandasPendentesCountProvider);
   }
 
   Future<void> _marcarConcluida() async {
     setState(() => _atualizando = true);
-    try {
-      await DemandasService.atualizarStatus(widget.demandaId, StatusDemanda.concluida);
-      if (!mounted) return;
-      setState(() => _demanda = _demanda?.copyWith(status: StatusDemanda.concluida));
-      ref.invalidate(demandasProvider);
-      // Atualiza o badge de pendentes no dashboard da gestão
-      ref.invalidate(demandasPendentesCountProvider);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao marcar como concluída. Tente novamente.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _atualizando = false);
-    }
+    await DemandasService.atualizarStatus(widget.demandaId, StatusDemanda.concluida);
+    if (!mounted) return;
+    setState(() {
+      _demanda = _demanda?.copyWith(status: StatusDemanda.concluida);
+      _atualizando = false;
+    });
+    ref.invalidate(demandasProvider);
   }
 
   @override
