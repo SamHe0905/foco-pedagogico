@@ -2,17 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 
-// Importação condicional: web usa dart:js, outras plataformas usam stub.
 import '_pwa_detector_stub.dart'
     if (dart.library.js) '_pwa_detector_web.dart' as pwa;
 
-/// Wrapper que exibe, uma vez por sessão, um banner incentivando o usuário a
-/// instalar o app na tela inicial (PWA).
-///
-/// Uso — envolva o body de qualquer Scaffold principal:
-/// ```dart
-/// body: const PwaInstallBanner(child: MinhaTelaBody()),
-/// ```
+/// Mostra um banner de instalação do PWA quando o app é acessado pelo browser.
+/// Não aparece se o app já estiver instalado (modo standalone).
 class PwaInstallBanner extends StatefulWidget {
   final Widget child;
   const PwaInstallBanner({super.key, required this.child});
@@ -23,9 +17,10 @@ class PwaInstallBanner extends StatefulWidget {
 
 class _PwaInstallBannerState extends State<PwaInstallBanner>
     with SingleTickerProviderStateMixin {
-  // Estático: persiste enquanto o app estiver aberto na mesma aba.
+  // Static: persiste durante a sessão (não repete após dispensar)
   static bool _sessionDismissed = false;
 
+  // Definidos antes do build() para evitar flash de estado
   bool _showBanner = false;
   bool _isIOS      = false;
   bool _hasPrompt  = false;
@@ -39,7 +34,7 @@ class _PwaInstallBannerState extends State<PwaInstallBanner>
 
     _anim = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 400),
     );
     _slide = Tween<Offset>(
       begin: const Offset(0, 1),
@@ -47,22 +42,19 @@ class _PwaInstallBannerState extends State<PwaInstallBanner>
     ).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
 
     if (kIsWeb && !_sessionDismissed) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkPwa());
+      // Detecta plataforma (pode ser feito em initState, JS já está disponível)
+      final standalone = pwa.isStandalone();
+      if (!standalone) {
+        _isIOS      = pwa.isIOS();
+        _hasPrompt  = pwa.hasInstallPrompt();
+        _showBanner = true;
+
+        // Inicia a animação após o primeiro frame
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _anim.forward();
+        });
+      }
     }
-  }
-
-  void _checkPwa() {
-    if (_sessionDismissed) return;
-
-    // Já instalado como PWA? Não exibe.
-    if (pwa.isStandalone()) return;
-
-    _isIOS     = pwa.isIOS();
-    _hasPrompt = pwa.hasInstallPrompt();
-
-    // Mostra sempre que não estiver instalado
-    setState(() => _showBanner = true);
-    _anim.forward();
   }
 
   void _instalar() {
@@ -92,7 +84,7 @@ class _PwaInstallBannerState extends State<PwaInstallBanner>
     return Stack(
       children: [
         widget.child,
-        if (kIsWeb && _showBanner && !_sessionDismissed)
+        if (_showBanner && !_sessionDismissed)
           Positioned(
             left: 0,
             right: 0,
@@ -112,7 +104,7 @@ class _PwaInstallBannerState extends State<PwaInstallBanner>
   }
 }
 
-// ─── Card do banner ───────────────────────────────────────────────────────────
+// ─── Card ─────────────────────────────────────────────────────────────────────
 
 class _BannerCard extends StatelessWidget {
   final bool isIOS;
@@ -142,7 +134,6 @@ class _BannerCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
             child: Row(
               children: [
-                // Ícone
                 Container(
                   width: 44,
                   height: 44,
@@ -154,8 +145,6 @@ class _BannerCard extends StatelessWidget {
                       color: AppColors.primary, size: 24),
                 ),
                 const SizedBox(width: 12),
-
-                // Texto
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,8 +163,8 @@ class _BannerCard extends StatelessWidget {
                         isIOS
                             ? 'Toque em Compartilhar ↑ → "Adicionar à Tela de Início".'
                             : hasPrompt
-                                ? 'Acesse mais rápido e receba notificações em tempo real.'
-                                : 'No menu do navegador, escolha "Instalar app" ou "Adicionar à tela inicial".',
+                                ? 'Acesse mais rápido e receba notificações.'
+                                : 'No menu do navegador, escolha "Instalar app".',
                         style: const TextStyle(
                             fontSize: 12, color: AppColors.textSecondary),
                         maxLines: 2,
@@ -184,8 +173,6 @@ class _BannerCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 4),
-
-                // Botão principal — apenas Chrome/Edge com prompt disponível
                 if (!isIOS && hasPrompt)
                   TextButton(
                     onPressed: onInstall,
@@ -197,8 +184,6 @@ class _BannerCard extends StatelessWidget {
                     child: const Text('Instalar',
                         style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
-
-                // Fechar
                 IconButton(
                   icon: const Icon(Icons.close_rounded,
                       size: 20, color: AppColors.textHint),
