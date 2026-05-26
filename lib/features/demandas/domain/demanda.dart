@@ -7,6 +7,8 @@ class Demanda {
   final String titulo;
   final String descricao;
   final String turma;
+  /// Turno ao qual esta demanda pertence. Null = sem turno específico (geral/individual sem turno).
+  final String? turno;
   final DateTime prazo;
   final StatusDemanda status;
   final PrioridadeDemanda prioridade;
@@ -17,6 +19,7 @@ class Demanda {
     required this.titulo,
     required this.descricao,
     required this.turma,
+    this.turno,
     required this.prazo,
     required this.status,
     required this.prioridade,
@@ -27,11 +30,12 @@ class Demanda {
   factory Demanda.fromSupabaseRow(Map<String, dynamic> row) {
     final d = row['demandas'] as Map<String, dynamic>;
     return Demanda(
-      id: d['id'] as String,
-      titulo: d['titulo'] as String,
+      id:        d['id']        as String,
+      titulo:    d['titulo']    as String,
       descricao: d['descricao'] as String? ?? '',
-      turma: d['turma'] as String,
-      prazo: DateTime.parse(d['prazo'] as String),
+      turma:     d['turma']     as String,
+      turno:     d['turno']     as String?,
+      prazo:     DateTime.parse(d['prazo'] as String),
       prioridade: switch (d['prioridade'] as String) {
         'alta'  => PrioridadeDemanda.alta,
         'baixa' => PrioridadeDemanda.baixa,
@@ -48,14 +52,15 @@ class Demanda {
 
   Demanda copyWith({StatusDemanda? status}) {
     return Demanda(
-      id: id,
-      titulo: titulo,
+      id:        id,
+      titulo:    titulo,
       descricao: descricao,
-      turma: turma,
-      prazo: prazo,
-      status: status ?? this.status,
+      turma:     turma,
+      turno:     turno,
+      prazo:     prazo,
+      status:    status ?? this.status,
       prioridade: prioridade,
-      criadaEm: criadaEm,
+      criadaEm:  criadaEm,
     );
   }
 

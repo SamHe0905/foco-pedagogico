@@ -8,7 +8,22 @@ class DemandasService {
   static String get _userId => _auth.currentUser!.id;
 
   static const _select =
-      'status, demandas(id, titulo, descricao, turma, prazo, prioridade, criada_em)';
+      'status, demandas(id, titulo, descricao, turma, turno, prazo, prioridade, criada_em)';
+
+  /// Retorna os turnos distintos das turmas deste professor.
+  static Future<List<String>> getTurnosDoProfessor() async {
+    final data = await _db
+        .from('professor_turmas')
+        .select('turmas(turno)')
+        .eq('professor_id', _userId);
+
+    final turnos = <String>{};
+    for (final row in data as List) {
+      final t = (row['turmas'] as Map<String, dynamic>?)?['turno'] as String?;
+      if (t != null) turnos.add(t);
+    }
+    return turnos.toList();
+  }
 
   // ── Lista todas as demandas do professor logado ───────────────────────────
 

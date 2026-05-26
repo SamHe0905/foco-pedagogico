@@ -16,6 +16,7 @@ import '../../features/coordenacao/presentation/detalhe_demanda_coordenacao_scre
 import '../../features/coordenacao/presentation/editar_demanda_screen.dart';
 import '../../features/coordenacao/presentation/mural_demandas_screen.dart';
 import '../../features/coordenacao/presentation/professores_screen.dart';
+import '../../features/coordenacao/presentation/gerenciar_turmas_screen.dart';
 
 abstract class AppRoutes {
   static const login                     = '/login';
@@ -28,6 +29,7 @@ abstract class AppRoutes {
   static const detalheDemandaCoordenacao = '/coordenacao/demanda/:id';
   static const professores               = '/coordenacao/professores';
   static const muralDemandas             = '/coordenacao/mural';
+  static const gerenciarTurmas           = '/coordenacao/turmas';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -98,6 +100,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const MuralDemandasScreen(),
           ),
           GoRoute(
+            path: 'turmas',
+            builder: (context, state) => const GerenciarTurmasScreen(),
+          ),
+          GoRoute(
             path: 'demanda/:id',
             builder: (context, state) => DetalheDemandaCoordenacaoScreen(
               demandaId: state.pathParameters['id']!,
@@ -128,3 +134,11 @@ final routerProvider = Provider<GoRouter>((ref) {
 // Retorna a rota home correta para cada role
 String homeRouteFor(RoleUsuario role) =>
     role.isDashboard ? AppRoutes.coordenacaoDashboard : AppRoutes.professorHome;
+
+// Retorna a rota home considerando o modo de visão atual (duplo acesso)
+String homeRouteForMode(RoleUsuario primaryRole, {bool viewAsSecundary = false, RoleUsuario? secundaryRole}) {
+  if (viewAsSecundary && secundaryRole != null) {
+    return homeRouteFor(secundaryRole);
+  }
+  return homeRouteFor(primaryRole);
+}

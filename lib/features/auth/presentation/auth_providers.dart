@@ -56,3 +56,7 @@ final currentUserProvider = FutureProvider<Usuario?>((ref) {
   if (session == null) return Future.value(null);
   return AuthService.buscarUsuarioAtual();
 });
+
+/// Controla se o usuário com duplo acesso está vendo o papel secundário.
+/// false = role principal, true = role secundário.
+final viewAsSecundaryProvider = StateProvider<bool>((ref) => false);

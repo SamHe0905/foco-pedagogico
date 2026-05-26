@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/router/app_router.dart';
+import '../../../shared/widgets/pwa_install_banner.dart';
 import '../../../shared/widgets/saudacao_header.dart';
+import '../../auth/domain/usuario.dart';
+import '../../auth/presentation/auth_providers.dart';
 import '../../auth/services/auth_service.dart';
 import '../domain/demanda.dart';
 import 'demandas_providers.dart';
@@ -19,8 +23,11 @@ class DemandasListScreen extends ConsumerWidget {
       next.whenData((_) => ref.invalidate(demandasProvider));
     });
 
-    final async = ref.watch(demandasProvider);
-    final filtro = ref.watch(filtroProvider);
+    final async      = ref.watch(demandasProvider);
+    final filtro     = ref.watch(filtroProvider);
+    final filtroTurno = ref.watch(filtroTurnoProvider);
+    final turnosAsync = ref.watch(turnosProfessorProvider);
+    final turnos     = turnosAsync.valueOrNull ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -32,51 +39,159 @@ class DemandasListScreen extends ConsumerWidget {
           alignment: Alignment.centerLeft,
         ),
         actions: [
+          // Toggle para usuário com duplo acesso
+          Consumer(builder: (ctx, r, _) {
+            final userAsync = r.watch(currentUserProvider);
+            return userAsync.maybeWhen(
+              data: (user) {
+                if (user == null || !user.temDuploAcesso) {
+                  return const SizedBox.shrink();
+                }
+                return IconButton(
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                  tooltip: 'Ver como Coordenação',
+                  onPressed: () {
+                    r.read(viewAsSecundaryProvider.notifier).state = false;
+                    if (user.roleSecundario != null &&
+                        user.roleSecundario!.isDashboard) {
+                      context.go(homeRouteFor(user.roleSecundario!));
+                    } else if (user.role.isDashboard) {
+                      context.go(homeRouteFor(user.role));
+                    }
+                  },
+                );
+              },
+              orElse: () => const SizedBox.shrink(),
+            );
+          }),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Sair',
-            onPressed: () async {
-              await AuthService.logout();
-              // GoRouterAuthNotifier notifica o router → redirect para /login
-            },
+            onPressed: () async => AuthService.logout(),
           ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
+      body: PwaInstallBanner(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
           child: Column(
             children: [
               const SaudacaoHeader(),
               const Divider(height: 1),
-          async.when(
-            data: (demandas) => _FilterBar(demandas: demandas),
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-          Expanded(
-            child: async.when(
-              loading: () => const _LoadingState(),
-              error: (e, _) => _ErrorState(
-                onRetry: () => ref.invalidate(demandasProvider),
-              ),
-              data: (demandas) {
-                final filtradas = filtro == null
-                    ? demandas
-                    : demandas.where((d) => d.status == filtro).toList();
 
-                return RefreshIndicator(
-                  color: AppColors.primary,
-                  onRefresh: () => ref.refresh(demandasProvider.future),
-                  child: filtradas.isEmpty
-                      ? _EmptyState(filtro: filtro)
-                      : _DemandaList(demandas: filtradas),
-                );
-              },
-            ),
-          ),
+              // ── Abas de turno (se o professor tem múltiplos turnos) ────────
+              if (turnos.length > 1) _TurnoTabBar(turnos: turnos),
+
+              // ── Filtro de status ───────────────────────────────────────────
+              async.when(
+                data: (demandas) {
+                  final porTurno = filtroTurno == null
+                      ? demandas
+                      : demandas.where((d) =>
+                          d.turno == null || d.turno == filtroTurno).toList();
+                  return _FilterBar(demandas: porTurno);
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+
+              // ── Lista ──────────────────────────────────────────────────────
+              Expanded(
+                child: async.when(
+                  loading: () => const _LoadingState(),
+                  error: (e, _) => _ErrorState(
+                    onRetry: () => ref.invalidate(demandasProvider),
+                  ),
+                  data: (demandas) {
+                    // Aplica filtro de turno: null = todas; status dentro do turno
+                    var filtradas = filtroTurno == null
+                        ? demandas
+                        : demandas.where((d) =>
+                            d.turno == null || d.turno == filtroTurno).toList();
+                    if (filtro != null) {
+                      filtradas = filtradas
+                          .where((d) => d.status == filtro)
+                          .toList();
+                    }
+
+                    return RefreshIndicator(
+                      color: AppColors.primary,
+                      onRefresh: () => ref.refresh(demandasProvider.future),
+                      child: filtradas.isEmpty
+                          ? _EmptyState(filtro: filtro)
+                          : _DemandaList(demandas: filtradas),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
+        ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Barra de abas por turno ──────────────────────────────────────────────────
+
+class _TurnoTabBar extends ConsumerWidget {
+  final List<String> turnos;
+  const _TurnoTabBar({required this.turnos});
+
+  static const _labels = {
+    'matutino':   'Matutino',
+    'vespertino': 'Vespertino',
+    'integral':   'Integral',
+    'noturno':    'Noturno',
+  };
+
+  static const _icons = {
+    'matutino':   Icons.wb_sunny_rounded,
+    'vespertino': Icons.wb_twilight_rounded,
+    'integral':   Icons.brightness_5_rounded,
+    'noturno':    Icons.nights_stay_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filtroTurno = ref.watch(filtroTurnoProvider);
+    final allTurnos = [null, ...turnos];
+
+    return Container(
+      color: AppColors.surface,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        child: Row(
+          children: allTurnos.map((t) {
+            final ativo = filtroTurno == t;
+            final label = t == null ? 'Todos' : (_labels[t] ?? t);
+            final icon  = t == null ? Icons.grid_view_rounded : _icons[t];
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                avatar: icon != null ? Icon(icon, size: 14) : null,
+                label: Text(label),
+                selected: ativo,
+                onSelected: (_) =>
+                    ref.read(filtroTurnoProvider.notifier).state = t,
+                selectedColor: AppColors.primary,
+                backgroundColor: AppColors.surfaceVariant,
+                labelStyle: TextStyle(
+                  fontSize: 13,
+                  fontWeight: ativo ? FontWeight.w600 : FontWeight.w400,
+                  color: ativo ? AppColors.surface : AppColors.textSecondary,
+                ),
+                showCheckmark: false,
+                side: BorderSide(
+                  color: ativo ? AppColors.primary : Colors.transparent,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );

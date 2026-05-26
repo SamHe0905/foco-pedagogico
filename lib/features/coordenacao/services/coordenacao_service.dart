@@ -5,7 +5,7 @@ import '../domain/demanda_resumo.dart';
 import '../domain/professor_pendencias.dart';
 import '../domain/professor_perfil.dart';
 import '../domain/status_professor.dart';
-import '../domain/turma.dart';
+import '../domain/turma.dart'; // inclui Turno e TurnoX
 
 class CoordenacaoService {
   static final _db   = Supabase.instance.client;
@@ -66,12 +66,49 @@ class CoordenacaoService {
   static Future<List<Turma>> getTurmas() async {
     final data = await _db
         .from('turmas')
-        .select('id, nome')
+        .select('id, nome, serie, turno')
+        .order('turno')
         .order('nome');
 
     return (data as List)
-        .map((m) => Turma(id: m['id'] as String, nome: m['nome'] as String))
+        .map((m) => Turma(
+              id:    m['id']    as String,
+              nome:  m['nome']  as String,
+              serie: m['serie'] as String? ?? '',
+              turno: TurnoX.fromString(m['turno'] as String? ?? 'matutino'),
+            ))
         .toList();
+  }
+
+  // ── CRUD de turmas ────────────────────────────────────────────────────────
+
+  static Future<void> criarTurma({
+    required String nome,
+    required String serie,
+    required Turno  turno,
+  }) async {
+    await _db.from('turmas').insert({
+      'nome':  nome.trim(),
+      'serie': serie.trim(),
+      'turno': turno.dbValue,
+    });
+  }
+
+  static Future<void> editarTurma({
+    required String id,
+    required String nome,
+    required String serie,
+    required Turno  turno,
+  }) async {
+    await _db.from('turmas').update({
+      'nome':  nome.trim(),
+      'serie': serie.trim(),
+      'turno': turno.dbValue,
+    }).eq('id', id);
+  }
+
+  static Future<void> excluirTurma(String turmaId) async {
+    await _db.from('turmas').delete().eq('id', turmaId);
   }
 
   // ── Lista de professores ──────────────────────────────────────────────────
@@ -80,7 +117,7 @@ class CoordenacaoService {
     final data = await _db
         .from('profiles')
         .select('id, nome')
-        .eq('role', 'professor')
+        .inFilter('role', ['professor', 'professor_aee'])
         .order('nome');
 
     return (data as List)
@@ -100,9 +137,11 @@ class CoordenacaoService {
     required String   tipo,
     required DateTime prazo,
     required String   prioridade,
-    String? turmaId,       // obrigatório quando tipo == 'turma'
-    String? turmaNome,     // nome legível da turma (para display)
-    String? professorId,   // obrigatório quando tipo == 'individual'
+    String?       turmaId,          // obrigatório quando tipo == 'turma'
+    String?       turmaNome,        // nome legível da turma (para display)
+    String?       turnoFiltro,      // turno da turma (para indexar nas demandas)
+    String?       professorId,      // compatibilidade — individual simples
+    List<String>? professorIds,     // individual multi-select
   }) async {
     // Texto de destino exibido nos cards
     final turmaDisplay = switch (tipo) {
@@ -119,6 +158,7 @@ class CoordenacaoService {
       'tipo':       tipo,
       'turma':      turmaDisplay,
       'turma_id':   turmaId,
+      'turno':      turnoFiltro,
       'prazo':      _formatDate(prazo),
       'prioridade': prioridade,
       'criada_por': _userId,
@@ -127,35 +167,38 @@ class CoordenacaoService {
     final demandaId = res['id'] as String;
 
     // 2. Determina quais professores recebem a demanda
-    final List<String> professorIds;
+    final List<String> destinos;
 
     switch (tipo) {
       case 'geral':
         final rows = await _db
             .from('profiles')
             .select('id')
-            .eq('role', 'professor');
-        professorIds = (rows as List).map((r) => r['id'] as String).toList();
+            .inFilter('role', ['professor', 'professor_aee']);
+        destinos = (rows as List).map((r) => r['id'] as String).toList();
 
       case 'turma':
         final rows = await _db
             .from('professor_turmas')
             .select('professor_id')
             .eq('turma_id', turmaId!);
-        professorIds = (rows as List).map((r) => r['professor_id'] as String).toList();
+        destinos = (rows as List).map((r) => r['professor_id'] as String).toList();
 
       case 'individual':
-        professorIds = [professorId!];
+        // Suporta multi-select: usa professorIds se fornecido, senão professorId
+        destinos = professorIds ?? (professorId != null ? [professorId] : []);
 
       default:
-        professorIds = [];
+        destinos = [];
     }
 
-    if (professorIds.isEmpty) return demandaId;
+    final professorIdsLocal = destinos;
+
+    if (professorIdsLocal.isEmpty) return demandaId;
 
     // 3. Atribui a demanda a cada professor
     await _db.from('demanda_professor').insert(
-      professorIds
+      professorIdsLocal
           .map((pid) => {
                 'demanda_id':   demandaId,
                 'professor_id': pid,
@@ -193,23 +236,23 @@ class CoordenacaoService {
         myRole == 'diretor' || myRole == 'diretor-adjunto';
 
     final rolesVisiveis = isDirector
-        ? ['professor', 'supervisor', 'coordenacao', 'diretor', 'diretor-adjunto']
-        : ['professor', 'supervisor', 'coordenacao']; // coordenador e supervisor veem todos exceto diretores
+        ? ['professor', 'supervisor', 'coordenacao', 'diretor', 'diretor-adjunto', 'pcsa', 'professor_aee']
+        : ['professor', 'supervisor', 'coordenacao', 'pcsa', 'professor_aee'];
 
     // 2. Perfis
     final profiles = await _db
         .from('profiles')
-        .select('id, nome, role')
+        .select('id, nome, role, role_secundario')
         .inFilter('role', rolesVisiveis)
-        .neq('id', _userId) // não lista a si mesmo
+        .neq('id', _userId)
         .order('nome');
 
-    // 2. Turmas por professor
+    // 3. Turmas por professor (agora inclui turno)
     final links = await _db
         .from('professor_turmas')
-        .select('professor_id, turmas(id, nome)');
+        .select('professor_id, turmas(id, nome, turno)');
 
-    // 3. Status ativo
+    // 4. Status ativo
     final statuses = await _db
         .from('professor_status')
         .select('professor_id, ativo');
@@ -219,7 +262,11 @@ class CoordenacaoService {
       final pid = l['professor_id'] as String;
       final t   = l['turmas'] as Map<String, dynamic>;
       turmasMap.putIfAbsent(pid, () => [])
-          .add(TurmaSimples(id: t['id'], nome: t['nome']));
+          .add(TurmaSimples(
+            id:    t['id']    as String,
+            nome:  t['nome']  as String,
+            turno: TurnoX.fromString(t['turno'] as String? ?? 'matutino'),
+          ));
     }
 
     final statusMap = <String, bool>{
@@ -229,11 +276,12 @@ class CoordenacaoService {
 
     return (profiles as List)
         .map((p) => ProfessorPerfil(
-              id:     p['id'] as String,
-              nome:   p['nome'] as String,
-              role:   p['role'] as String,
-              ativo:  statusMap[p['id']] ?? true,
-              turmas: turmasMap[p['id']] ?? [],
+              id:             p['id']             as String,
+              nome:           p['nome']           as String,
+              role:           p['role']           as String,
+              roleSecundario: p['role_secundario'] as String?,
+              ativo:          statusMap[p['id']] ?? true,
+              turmas:         turmasMap[p['id']] ?? [],
             ))
         .toList();
   }

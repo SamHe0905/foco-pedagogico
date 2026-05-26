@@ -73,7 +73,7 @@ class AuthService {
     // Tenta buscar o perfil existente
     var data = await _db
         .from('profiles')
-        .select('nome, role')
+        .select('nome, role, role_secundario')
         .eq('id', userId)
         .maybeSingle();
 
@@ -95,12 +95,12 @@ class AuthService {
           'nome': nome,
           'role': role,
         });
-        data = {'nome': nome, 'role': role};
+        data = {'nome': nome, 'role': role, 'role_secundario': null};
       } catch (_) {
         // INSERT falhou (RLS ou perfil criado por outro caminho) — tenta buscar novamente
         data = await _db
             .from('profiles')
-            .select('nome, role')
+            .select('nome, role, role_secundario')
             .eq('id', userId)
             .maybeSingle();
       }
@@ -112,11 +112,16 @@ class AuthService {
       );
     }
 
+    final roleSecStr = data['role_secundario'] as String?;
+
     return Usuario(
       id: userId,
       email: email,
       nome: data['nome'] as String,
       role: RoleUsuarioX.fromString(data['role'] as String),
+      roleSecundario: roleSecStr != null
+          ? RoleUsuarioX.fromString(roleSecStr)
+          : null,
     );
   }
 

@@ -7,20 +7,83 @@ import '../domain/professor_perfil.dart';
 import '../services/coordenacao_service.dart';
 import 'coordenacao_providers.dart';
 
-class ProfessoresScreen extends ConsumerWidget {
+class ProfessoresScreen extends ConsumerStatefulWidget {
   const ProfessoresScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfessoresScreen> createState() => _ProfessoresScreenState();
+}
+
+class _ProfessoresScreenState extends ConsumerState<ProfessoresScreen> {
+  final Set<String> _selectedIds = {};
+  bool get _emModoSelecao => _selectedIds.isNotEmpty;
+
+  void _toggleSelecao(String id) => setState(() {
+        if (_selectedIds.contains(id)) {
+          _selectedIds.remove(id);
+        } else {
+          _selectedIds.add(id);
+        }
+      });
+
+  void _cancelar() => setState(() => _selectedIds.clear());
+
+  void _enviarDemandaParaSelecionados(List<ProfessorPerfil> todos) {
+    final selecionados =
+        todos.where((m) => _selectedIds.contains(m.id)).toList();
+    _cancelar();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _EnviarDemandaSheet(
+        professores: selecionados,
+        ref: ref,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final userAsync  = ref.watch(currentUserProvider);
     final async      = ref.watch(professoresPerfisProvider);
     final isDirector = userAsync.valueOrNull?.role.isDirector ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(isDirector ? 'Equipe' : 'Professores'),
-      ),
+      appBar: _emModoSelecao
+          ? AppBar(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              leading: IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: _cancelar,
+              ),
+              title: Text(
+                '${_selectedIds.length} selecionado${_selectedIds.length > 1 ? 's' : ''}',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              actions: [
+                async.whenOrNull(
+                      data: (membros) => TextButton.icon(
+                        icon: const Icon(Icons.send_rounded,
+                            color: Colors.white, size: 18),
+                        label: const Text('Criar Demanda',
+                            style: TextStyle(color: Colors.white)),
+                        onPressed: () =>
+                            _enviarDemandaParaSelecionados(membros),
+                      ),
+                    ) ??
+                    const SizedBox.shrink(),
+              ],
+            )
+          : AppBar(
+              title: Text(isDirector ? 'Equipe' : 'Professores'),
+            ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
@@ -34,17 +97,25 @@ class ProfessoresScreen extends ConsumerWidget {
             ),
             data: (membros) => membros.isEmpty
                 ? const _EmptyState()
-                : _MembrosList(membros: membros),
+                : _MembrosList(
+                    membros: membros,
+                    selectedIds: _selectedIds,
+                    emModoSelecao: _emModoSelecao,
+                    onLongPress: _toggleSelecao,
+                    onToggle: _toggleSelecao,
+                  ),
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _mostrarIntegrar(context, ref, isDirector),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.person_add_rounded),
-        label: const Text('Integrar Docente'),
-      ),
+      floatingActionButton: _emModoSelecao
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _mostrarIntegrar(context, ref, isDirector),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.person_add_rounded),
+              label: const Text('Integrar Docente'),
+            ),
     );
   }
 
@@ -65,15 +136,50 @@ class ProfessoresScreen extends ConsumerWidget {
 
 class _MembrosList extends StatelessWidget {
   final List<ProfessorPerfil> membros;
-  const _MembrosList({required this.membros});
+  final Set<String> selectedIds;
+  final bool emModoSelecao;
+  final void Function(String) onLongPress;
+  final void Function(String) onToggle;
+
+  const _MembrosList({
+    required this.membros,
+    required this.selectedIds,
+    required this.emModoSelecao,
+    required this.onLongPress,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: membros.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, i) => _MembroTile(membro: membros[i]),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!emModoSelecao)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              'Segure para selecionar e enviar demanda',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textHint,
+                    fontSize: 11,
+                  ),
+            ),
+          ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+            itemCount: membros.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, i) => _MembroTile(
+              membro: membros[i],
+              isSelected: selectedIds.contains(membros[i].id),
+              emModoSelecao: emModoSelecao,
+              onLongPress: () => onLongPress(membros[i].id),
+              onToggle: () => onToggle(membros[i].id),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -82,23 +188,51 @@ class _MembrosList extends StatelessWidget {
 
 class _MembroTile extends ConsumerWidget {
   final ProfessorPerfil membro;
-  const _MembroTile({required this.membro});
+  final bool isSelected;
+  final bool emModoSelecao;
+  final VoidCallback onLongPress;
+  final VoidCallback onToggle;
+
+  const _MembroTile({
+    required this.membro,
+    required this.isSelected,
+    required this.emModoSelecao,
+    required this.onLongPress,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: isSelected
+            ? AppColors.primary.withValues(alpha: 0.06)
+            : AppColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: membro.ativo
-              ? AppColors.divider
-              : AppColors.error.withValues(alpha: 0.3),
+          color: isSelected
+              ? AppColors.primary
+              : membro.ativo
+                  ? AppColors.divider
+                  : AppColors.error.withValues(alpha: 0.3),
+          width: isSelected ? 1.5 : 1,
         ),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-        leading: _Avatar(nome: membro.nome, ativo: membro.ativo),
+        leading: emModoSelecao
+            ? AnimatedSwitcher(
+                duration: const Duration(milliseconds: 150),
+                child: isSelected
+                    ? const Icon(Icons.check_circle_rounded,
+                        key: ValueKey('c'), color: AppColors.primary, size: 36)
+                    : _Avatar(
+                        key: const ValueKey('a'),
+                        nome: membro.nome,
+                        ativo: membro.ativo),
+              )
+            : _Avatar(nome: membro.nome, ativo: membro.ativo),
         title: Row(
           children: [
             Expanded(
@@ -129,15 +263,18 @@ class _MembroTile extends ConsumerWidget {
                 spacing: 4,
                 runSpacing: 4,
                 children: membro.turmas
-                    .map((t) => _TurmaChip(nome: t.nome))
+                    .map((t) => _TurmaChip(nome: t.nomeCompleto))
                     .toList(),
               ),
-        trailing: IconButton(
-          icon:
-              const Icon(Icons.more_vert_rounded, color: AppColors.textHint),
-          onPressed: () => _mostrarOpcoes(context, ref),
-        ),
-        onTap: () => _mostrarOpcoes(context, ref),
+        trailing: emModoSelecao
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.more_vert_rounded,
+                    color: AppColors.textHint),
+                onPressed: () => _mostrarOpcoes(context, ref),
+              ),
+        onTap: emModoSelecao ? onToggle : () => _mostrarOpcoes(context, ref),
+        onLongPress: emModoSelecao ? null : onLongPress,
       ),
     );
   }
@@ -166,6 +303,8 @@ class _RoleBadge extends StatelessWidget {
         'supervisor'      => ('Supervisor',  AppColors.secondary),
         'diretor'         => ('Diretor',     AppColors.primaryDark),
         'diretor-adjunto' => ('Dir. Adj.',   AppColors.primaryDark),
+        'pcsa'            => ('PCSA',        AppColors.primary),
+        'professor_aee'   => ('AEE',         Colors.teal),
         _                 => ('Professor',   AppColors.textSecondary),
       };
 
@@ -194,7 +333,7 @@ class _RoleBadge extends StatelessWidget {
 class _Avatar extends StatelessWidget {
   final String nome;
   final bool ativo;
-  const _Avatar({required this.nome, required this.ativo});
+  const _Avatar({super.key, required this.nome, required this.ativo});
 
   @override
   Widget build(BuildContext context) {
@@ -539,6 +678,8 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
         'supervisor'      => 'Supervisor',
         'diretor'         => 'Diretor',
         'diretor-adjunto' => 'Dir. Adjunto',
+        'pcsa'            => 'PCSA',
+        'professor_aee'   => 'Prof. AEE',
         _                 => 'Professor',
       };
 
@@ -648,7 +789,7 @@ class _TurmasSheetState extends ConsumerState<_TurmasSheet> {
               children: turmas.map((t) {
                 final sel = _selecionadas.contains(t.id);
                 return FilterChip(
-                  label: Text(t.nome),
+                  label: Text(t.nomeCompleto),
                   selected: sel,
                   onSelected: (_) => setState(() {
                     if (sel) {
@@ -694,19 +835,294 @@ class _TurmasSheetState extends ConsumerState<_TurmasSheet> {
   }
 }
 
+// ─── Bottom sheet: criar demanda para selecionados ───────────────────────────
+
+class _EnviarDemandaSheet extends StatefulWidget {
+  final List<ProfessorPerfil> professores;
+  final WidgetRef ref;
+  const _EnviarDemandaSheet({required this.professores, required this.ref});
+
+  @override
+  State<_EnviarDemandaSheet> createState() => _EnviarDemandaSheetState();
+}
+
+class _EnviarDemandaSheetState extends State<_EnviarDemandaSheet> {
+  final _tituloController    = TextEditingController();
+  final _descricaoController = TextEditingController();
+  DateTime _prazo    = DateTime.now().add(const Duration(days: 7));
+  String _prioridade = 'media';
+  bool _enviando     = false;
+  String? _erro;
+
+  @override
+  void dispose() {
+    _tituloController.dispose();
+    _descricaoController.dispose();
+    super.dispose();
+  }
+
+  bool get _podeEnviar =>
+      _tituloController.text.trim().isNotEmpty && !_enviando;
+
+  Future<void> _selecionarData() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _prazo,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _prazo = picked);
+  }
+
+  Future<void> _enviar() async {
+    setState(() { _enviando = true; _erro = null; });
+    try {
+      await CoordenacaoService.criarDemanda(
+        titulo:       _tituloController.text,
+        descricao:    _descricaoController.text,
+        tipo:         'individual',
+        prazo:        _prazo,
+        prioridade:   _prioridade,
+        professorIds: widget.professores.map((p) => p.id).toList(),
+      );
+      widget.ref.invalidate(professoresPerfisProvider);
+      if (mounted) {
+        Navigator.of(context).pop();
+        final n = widget.professores.length;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Demanda enviada para $n professor${n > 1 ? 'es' : ''}!',
+            ),
+            backgroundColor: AppColors.statusConcluida,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _erro = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dd = _prazo.day.toString().padLeft(2, '0');
+    final mm = _prazo.month.toString().padLeft(2, '0');
+    final yyyy = _prazo.year;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Criar Demanda',
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+
+            // Chips dos professores selecionados
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: widget.professores
+                  .map((p) => Chip(
+                        label: Text(p.nome,
+                            style: const TextStyle(fontSize: 12)),
+                        backgroundColor:
+                            AppColors.primary.withValues(alpha: 0.08),
+                        side: BorderSide(
+                            color:
+                                AppColors.primary.withValues(alpha: 0.30)),
+                        labelStyle:
+                            const TextStyle(color: AppColors.primary),
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 4),
+                        visualDensity: VisualDensity.compact,
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 20),
+
+            // Título
+            TextField(
+              controller: _tituloController,
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Título da demanda',
+                hintText: 'Ex: Entregar planejamento semanal',
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Descrição
+            TextField(
+              controller: _descricaoController,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Descrição (opcional)',
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Prazo
+            InkWell(
+              onTap: _selecionarData,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.divider),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today_rounded,
+                        size: 18, color: AppColors.primary),
+                    const SizedBox(width: 12),
+                    Text('Prazo: $dd/$mm/$yyyy',
+                        style: const TextStyle(fontSize: 14)),
+                    const Spacer(),
+                    const Icon(Icons.chevron_right_rounded,
+                        color: AppColors.textHint),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Prioridade
+            Text(
+              'Prioridade',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (final opt in const [
+                  ('alta', 'Alta'),
+                  ('media', 'Média'),
+                  ('baixa', 'Baixa'),
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () =>
+                          setState(() => _prioridade = opt.$1),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _prioridade == opt.$1
+                              ? _prioridadeColor(opt.$1)
+                              : AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _prioridade == opt.$1
+                                ? _prioridadeColor(opt.$1)
+                                : Colors.transparent,
+                          ),
+                        ),
+                        child: Text(
+                          opt.$2,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _prioridade == opt.$1
+                                ? Colors.white
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            // Erro
+            if (_erro != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(_erro!,
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.error)),
+              ),
+            ],
+            const SizedBox(height: 20),
+
+            // Botão
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _podeEnviar ? _enviar : null,
+                icon: _enviando
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.surface),
+                      )
+                    : const Icon(Icons.send_rounded),
+                label: Text(_enviando ? 'Enviando…' : 'Enviar Demanda'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _prioridadeColor(String p) => switch (p) {
+        'alta'  => AppColors.error,
+        'baixa' => AppColors.statusConcluida,
+        _       => AppColors.secondary,
+      };
+}
+
 // ─── Bottom sheet: integrar docente ──────────────────────────────────────────
 
 // Opções de cargo disponíveis por quem convida
 const _rolesParaCoordenador = [
-  ('professor',  'Professor'),
-  ('supervisor', 'Supervisor'),
-  ('coordenacao','Coordenação'),
+  ('professor',       'Professor'),
+  ('professor_aee',   'Prof. AEE'),
+  ('supervisor',      'Supervisor'),
+  ('coordenacao',     'Coordenação'),
+  ('pcsa',            'PCSA'),
 ];
 
 const _rolesParaDiretor = [
   ('professor',       'Professor'),
+  ('professor_aee',   'Prof. AEE'),
   ('supervisor',      'Supervisor'),
   ('coordenacao',     'Coordenação'),
+  ('pcsa',            'PCSA'),
   ('diretor',         'Diretor'),
   ('diretor-adjunto', 'Dir. Adjunto'),
 ];

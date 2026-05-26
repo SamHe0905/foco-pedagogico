@@ -8,8 +8,8 @@ const corsHeaders = {
 }
 
 // Roles que cada nível pode atribuir
-const ROLES_COORDENADOR = new Set(['professor', 'supervisor', 'coordenacao'])
-const ROLES_DIRETOR     = new Set(['professor', 'supervisor', 'coordenacao', 'diretor', 'diretor-adjunto'])
+const ROLES_COORDENADOR = new Set(['professor', 'professor_aee', 'supervisor', 'coordenacao', 'pcsa'])
+const ROLES_DIRETOR     = new Set(['professor', 'professor_aee', 'supervisor', 'coordenacao', 'pcsa', 'diretor', 'diretor-adjunto'])
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -46,7 +46,7 @@ serve(async (req) => {
 
     const myRole     = perfil?.role as string | undefined
     const isDirector = myRole === 'diretor' || myRole === 'diretor-adjunto'
-    const isCoordenador = myRole === 'coordenacao' || myRole === 'supervisor'
+    const isCoordenador = myRole === 'coordenacao' || myRole === 'supervisor' || myRole === 'pcsa'
 
     if (!isDirector && !isCoordenador) {
       return json({ error: 'Sem permissão.' }, 403)

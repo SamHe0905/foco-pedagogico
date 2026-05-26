@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../shared/widgets/pwa_install_banner.dart';
 import '../../../shared/widgets/saudacao_header.dart';
+import '../../auth/presentation/auth_providers.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/coordenacao_service.dart';
 import '../../demandas/domain/demanda.dart';
@@ -137,11 +139,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 alignment: Alignment.centerLeft,
               ),
               actions: [
+                // Toggle duplo acesso
+                Consumer(builder: (context, ref, _) {
+                  final userAsync = ref.watch(currentUserProvider);
+                  return userAsync.maybeWhen(
+                    data: (user) {
+                      if (user == null || !user.temDuploAcesso) {
+                        return const SizedBox.shrink();
+                      }
+                      final isSecundary = ref.watch(viewAsSecundaryProvider);
+                      return IconButton(
+                        icon: Icon(
+                          isSecundary
+                              ? Icons.swap_horiz_rounded
+                              : Icons.school_rounded,
+                          color: isSecundary ? AppColors.secondary : null,
+                        ),
+                        tooltip: isSecundary
+                            ? 'Voltar para Coordenação'
+                            : 'Ver como Professor',
+                        onPressed: () {
+                          final novo = !isSecundary;
+                          ref.read(viewAsSecundaryProvider.notifier).state = novo;
+                          if (novo && user.roleSecundario != null) {
+                            context.go(homeRouteFor(user.roleSecundario!));
+                          }
+                        },
+                      );
+                    },
+                    orElse: () => const SizedBox.shrink(),
+                  );
+                }),
                 // Mural de demandas gerais
                 IconButton(
                   icon: const Icon(Icons.dashboard_rounded),
                   tooltip: 'Mural de Demandas',
                   onPressed: () => context.push(AppRoutes.muralDemandas),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.class_rounded),
+                  tooltip: 'Gerenciar Turmas',
+                  onPressed: () => context.push(AppRoutes.gerenciarTurmas),
                 ),
                 IconButton(
                   icon: const Icon(Icons.people_rounded),
@@ -155,7 +193,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ],
             ),
-      body: async.when(
+      body: PwaInstallBanner(
+        child: async.when(
         loading: () => const _LoadingState(),
         error: (_, __) => _ErrorState(
           onRetry: () => ref.invalidate(coordenacaoDemandasProvider),
@@ -181,6 +220,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
             ),
           ),
+        ),
         ),
       ),
       floatingActionButton: _emModoSelecao

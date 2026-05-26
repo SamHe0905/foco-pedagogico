@@ -4,6 +4,10 @@ enum RoleUsuario {
   supervisor,
   diretor,
   diretorAdjunto,
+  /// Professor Coordenador de Suporte à Aprendizagem
+  pcsa,
+  /// Professor de Atendimento Educacional Especializado
+  professorAee,
 }
 
 extension RoleUsuarioX on RoleUsuario {
@@ -12,7 +16,19 @@ extension RoleUsuarioX on RoleUsuario {
         'supervisor'      => RoleUsuario.supervisor,
         'diretor'         => RoleUsuario.diretor,
         'diretor-adjunto' => RoleUsuario.diretorAdjunto,
+        'pcsa'            => RoleUsuario.pcsa,
+        'professor_aee'   => RoleUsuario.professorAee,
         _                 => RoleUsuario.professor,
+      };
+
+  String get dbValue => switch (this) {
+        RoleUsuario.professor     => 'professor',
+        RoleUsuario.coordenacao   => 'coordenacao',
+        RoleUsuario.supervisor    => 'supervisor',
+        RoleUsuario.diretor       => 'diretor',
+        RoleUsuario.diretorAdjunto => 'diretor-adjunto',
+        RoleUsuario.pcsa          => 'pcsa',
+        RoleUsuario.professorAee  => 'professor_aee',
       };
 
   /// Prefixo usado na saudação: "Prof. Samuel", "Coord. Samuel", etc.
@@ -22,6 +38,8 @@ extension RoleUsuarioX on RoleUsuario {
         RoleUsuario.supervisor    => 'Sup.',
         RoleUsuario.diretor       => 'Dir.',
         RoleUsuario.diretorAdjunto => 'Dir. Adj.',
+        RoleUsuario.pcsa          => 'PCSA',
+        RoleUsuario.professorAee  => 'Prof. AEE',
       };
 
   /// Rótulo exibido abaixo da saudação.
@@ -31,6 +49,8 @@ extension RoleUsuarioX on RoleUsuario {
         RoleUsuario.supervisor    => 'Supervisão Pedagógica',
         RoleUsuario.diretor       => 'Direção',
         RoleUsuario.diretorAdjunto => 'Direção Adjunta',
+        RoleUsuario.pcsa          => 'Prof. Coord. de Suporte à Aprendizagem',
+        RoleUsuario.professorAee  => 'Educação Especial (AEE)',
       };
 
   /// True para diretores (acesso total ao app).
@@ -41,7 +61,12 @@ extension RoleUsuarioX on RoleUsuario {
   bool get isDashboard =>
       this == RoleUsuario.coordenacao ||
       this == RoleUsuario.supervisor   ||
+      this == RoleUsuario.pcsa         ||
       isDirector;
+
+  /// True para quem tem acesso a demandas de todos os turnos.
+  bool get verTodosOsTurnos =>
+      isDashboard || this == RoleUsuario.professorAee;
 }
 
 class Usuario {
@@ -50,10 +75,18 @@ class Usuario {
   final String nome;
   final RoleUsuario role;
 
+  /// Cargo secundário para usuários com duplo acesso
+  /// (ex: coordenador em um turno, professor em outro).
+  final RoleUsuario? roleSecundario;
+
   const Usuario({
     required this.id,
     required this.email,
     required this.nome,
     required this.role,
+    this.roleSecundario,
   });
+
+  /// True se este usuário tem acesso duplo (professor + coordenação ou vice-versa).
+  bool get temDuploAcesso => roleSecundario != null;
 }
