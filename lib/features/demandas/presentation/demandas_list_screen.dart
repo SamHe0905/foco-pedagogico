@@ -14,26 +14,34 @@ import 'demandas_providers.dart';
 const _turnoOrdem = ['matutino', 'vespertino', 'integral', 'noturno'];
 
 const _turnoLabels = {
-  'gerais':     'Gerais',
-  'matutino':   'Matutino',
-  'vespertino': 'Vespertino',
-  'integral':   'Integral',
-  'noturno':    'Noturno',
+  'gerais':      'Gerais',
+  'individual':  'Individual',
+  'matutino':    'Matutino',
+  'vespertino':  'Vespertino',
+  'integral':    'Integral',
+  'noturno':     'Noturno',
 };
 
 const _turnoIcons = {
-  'gerais':     Icons.grid_view_rounded,
-  'matutino':   Icons.wb_sunny_rounded,
-  'vespertino': Icons.wb_twilight_rounded,
-  'integral':   Icons.brightness_5_rounded,
-  'noturno':    Icons.nights_stay_rounded,
+  'gerais':      Icons.grid_view_rounded,
+  'individual':  Icons.person_rounded,
+  'matutino':    Icons.wb_sunny_rounded,
+  'vespertino':  Icons.wb_twilight_rounded,
+  'integral':    Icons.brightness_5_rounded,
+  'noturno':     Icons.nights_stay_rounded,
 };
 
 List<Demanda> _filtrarSecao(List<Demanda> demandas, String secao) {
   if (secao == 'gerais') {
     return demandas
-        .where((d) => d.tipo != TipoDemanda.turma || d.turno == null)
+        .where((d) =>
+            d.tipo == TipoDemanda.geral ||
+            d.tipo == TipoDemanda.coordenacao ||
+            d.tipo == TipoDemanda.gestao)
         .toList();
+  }
+  if (secao == 'individual') {
+    return demandas.where((d) => d.tipo == TipoDemanda.individual).toList();
   }
   return demandas
       .where((d) => d.tipo == TipoDemanda.turma && d.turno == secao)
@@ -114,12 +122,10 @@ class _TurnoSelecaoScreen extends ConsumerWidget {
                     ),
                     data: (demandas) {
                       // Agrupa para saber quais seções existem
-                      final gerais = _filtrarSecao(demandas, 'gerais');
                       final secoes = <(String, List<Demanda>)>[];
-                      if (gerais.isNotEmpty) secoes.add(('gerais', gerais));
-                      for (final t in _turnoOrdem) {
-                        final ds = _filtrarSecao(demandas, t);
-                        if (ds.isNotEmpty) secoes.add((t, ds));
+                      for (final secao in ['gerais', 'individual', ..._turnoOrdem]) {
+                        final ds = _filtrarSecao(demandas, secao);
+                        if (ds.isNotEmpty) secoes.add((secao, ds));
                       }
 
                       return RefreshIndicator(
