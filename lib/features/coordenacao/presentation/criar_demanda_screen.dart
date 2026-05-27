@@ -2,6 +2,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../auth/domain/usuario.dart';
+import '../../auth/presentation/auth_providers.dart';
 import '../domain/turma.dart';
 import '../services/coordenacao_service.dart';
 import 'coordenacao_providers.dart';
@@ -158,6 +160,10 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Gestão (diretor, dir. adjunto, secretaria) vê opção "Gestão" no lugar de "Coordenação"
+    final showGestao =
+        ref.watch(currentUserProvider).valueOrNull?.role.isDirector ?? false;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Nova Demanda')),
@@ -174,6 +180,7 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
                   const SizedBox(height: 8),
                   _TipoSelector(
                     tipo: _tipo,
+                    showGestao: showGestao,
                     onChanged: (v) => setState(() {
                       _tipo = v;
                       _turmaSelecionada    = null;
@@ -334,11 +341,46 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Esta demanda será enviada para a direção '
-                              '(diretor e diretor-adjunto).',
+                              'Esta demanda será enviada para a coordenação '
+                              'pedagógica (coordenação, supervisão, PCSA e PCPI), '
+                              'exceto você.',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  if (_tipo == 'gestao') ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.primaryDark.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.domain_rounded,
+                            color: AppColors.primaryDark,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Esta demanda será enviada para a gestão '
+                              '(Direção, Direção Adjunta e Secretaria), '
+                              'exceto você.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.primaryDark,
                               ),
                             ),
                           ),
@@ -489,17 +531,33 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
 class _TipoSelector extends StatelessWidget {
   final String tipo;
   final ValueChanged<String> onChanged;
+  /// Quando true, substitui "Coordenação" por "Gestão" (para diretores/secretaria).
+  final bool showGestao;
 
-  const _TipoSelector({required this.tipo, required this.onChanged});
+  const _TipoSelector({
+    required this.tipo,
+    required this.onChanged,
+    this.showGestao = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const options = [
-      ('geral',       Icons.groups_rounded,            'Geral'),
-      ('turma',       Icons.class_rounded,             'Turma'),
-      ('individual',  Icons.person_rounded,            'Individual'),
-      ('coordenacao', Icons.admin_panel_settings_rounded, 'Coordenação'),
-    ];
+    // Diretores/secretaria têm 5 opções (inclui Gestão);
+    // demais têm 4. Em 5 opções, "Coordenação" vira "Coord." para caber.
+    final options = showGestao
+        ? const [
+            ('geral',       Icons.groups_rounded,               'Geral'),
+            ('turma',       Icons.class_rounded,                'Turma'),
+            ('individual',  Icons.person_rounded,               'Individual'),
+            ('coordenacao', Icons.admin_panel_settings_rounded, 'Coord.'),
+            ('gestao',      Icons.domain_rounded,               'Gestão'),
+          ]
+        : const [
+            ('geral',       Icons.groups_rounded,               'Geral'),
+            ('turma',       Icons.class_rounded,                'Turma'),
+            ('individual',  Icons.person_rounded,               'Individual'),
+            ('coordenacao', Icons.admin_panel_settings_rounded, 'Coordenação'),
+          ];
 
     return Row(
       children: options.map((opt) {

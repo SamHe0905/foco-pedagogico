@@ -130,7 +130,7 @@ class CoordenacaoService {
   // tipo = 'geral'       → atribui a todos os professores
   // tipo = 'turma'       → atribui aos professores da turma selecionada
   // tipo = 'individual'  → atribui a um professor específico
-  // tipo = 'coordenacao' → atribui à direção (diretor + diretor-adjunto)
+  // tipo = 'coordenacao' → atribui à coordenação (coordenacao + supervisor + pcsa)
 
   static Future<String> criarDemanda({
     required String   titulo,
@@ -150,6 +150,7 @@ class CoordenacaoService {
       'turma'       => turmaNome ?? '',
       'individual'  => 'Individual',
       'coordenacao' => 'Coordenação',
+      'gestao'      => 'Gestão',
       _             => '',
     };
 
@@ -191,11 +192,23 @@ class CoordenacaoService {
         destinos = professorIds ?? (professorId != null ? [professorId] : []);
 
       case 'coordenacao':
-        // Demanda direcionada à direção da escola
+        // Comunicação interna da coordenação pedagógica
         final rows = await _db
             .from('profiles')
             .select('id')
-            .inFilter('role', ['diretor', 'diretor-adjunto']);
+            .inFilter('role', ['coordenacao', 'supervisor', 'pcsa', 'pcpi']);
+        // Não envia para si mesmo
+        destinos = (rows as List)
+            .map((r) => r['id'] as String)
+            .where((id) => id != _userId)
+            .toList();
+
+      case 'gestao':
+        // Comunicação da gestão: direção, direção adjunta e secretaria
+        final rows = await _db
+            .from('profiles')
+            .select('id')
+            .inFilter('role', ['diretor', 'diretor-adjunto', 'secretaria']);
         // Não envia para si mesmo
         destinos = (rows as List)
             .map((r) => r['id'] as String)
@@ -247,10 +260,10 @@ class CoordenacaoService {
         .single();
     final myRole = meData['role'] as String;
     final isDirector =
-        myRole == 'diretor' || myRole == 'diretor-adjunto';
+        myRole == 'diretor' || myRole == 'diretor-adjunto' || myRole == 'secretaria';
 
     final rolesVisiveis = isDirector
-        ? ['professor', 'supervisor', 'coordenacao', 'diretor', 'diretor-adjunto', 'pcsa', 'professor_aee']
+        ? ['professor', 'supervisor', 'coordenacao', 'diretor', 'diretor-adjunto', 'pcsa', 'professor_aee', 'secretaria']
         : ['professor', 'supervisor', 'coordenacao', 'pcsa', 'professor_aee'];
 
     // 2. Perfis

@@ -73,7 +73,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.professorHome,
-        builder: (context, state) => const DemandasListScreen(),
+        builder: (context, state) => const DemandasListScreen(useTurnoCards: true),
         routes: [
           GoRoute(
             path: 'demanda/:id',

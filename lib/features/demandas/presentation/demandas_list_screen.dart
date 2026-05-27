@@ -14,6 +14,7 @@ import 'demandas_providers.dart';
 const _turnoOrdem = ['matutino', 'vespertino', 'integral', 'noturno'];
 
 const _turnoLabels = {
+  'gerais':     'Gerais',
   'matutino':   'Matutino',
   'vespertino': 'Vespertino',
   'integral':   'Integral',
@@ -21,16 +22,31 @@ const _turnoLabels = {
 };
 
 const _turnoIcons = {
+  'gerais':     Icons.grid_view_rounded,
   'matutino':   Icons.wb_sunny_rounded,
   'vespertino': Icons.wb_twilight_rounded,
   'integral':   Icons.brightness_5_rounded,
   'noturno':    Icons.nights_stay_rounded,
 };
 
-// ─── Screen ──────────────────────────────────────────────────────────────────
+List<Demanda> _filtrarSecao(List<Demanda> demandas, String secao) {
+  if (secao == 'gerais') {
+    return demandas
+        .where((d) => d.tipo != TipoDemanda.turma || d.turno == null)
+        .toList();
+  }
+  return demandas
+      .where((d) => d.tipo == TipoDemanda.turma && d.turno == secao)
+      .toList();
+}
+
+// ─── Entry point ─────────────────────────────────────────────────────────────
 
 class DemandasListScreen extends ConsumerWidget {
-  const DemandasListScreen({super.key});
+  /// true = tela do professor (cards de turno + drill-down)
+  /// false = inbox da coordenação (lista direta)
+  final bool useTurnoCards;
+  const DemandasListScreen({super.key, this.useTurnoCards = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,8 +54,24 @@ class DemandasListScreen extends ConsumerWidget {
       next.whenData((_) => ref.invalidate(demandasProvider));
     });
 
-    final async  = ref.watch(demandasProvider);
-    final filtro = ref.watch(filtroProvider);
+    if (!useTurnoCards) {
+      return const _DemandasScreen(turnoFiltro: null, useTurnoCards: false);
+    }
+
+    final turno = ref.watch(turnoSelecionadoProvider);
+    if (turno == null) return const _TurnoSelecaoScreen();
+    return _DemandasScreen(turnoFiltro: turno, useTurnoCards: true);
+  }
+}
+
+// ─── Tela de seleção de turno (cards) ────────────────────────────────────────
+
+class _TurnoSelecaoScreen extends ConsumerWidget {
+  const _TurnoSelecaoScreen();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(demandasProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -51,38 +83,7 @@ class DemandasListScreen extends ConsumerWidget {
           alignment: Alignment.centerLeft,
         ),
         actions: [
-          Consumer(builder: (ctx, r, _) {
-            final userAsync = r.watch(currentUserProvider);
-            return userAsync.maybeWhen(
-              data: (user) {
-                if (user == null ||
-                    !user.temDuploAcesso ||
-                    user.roleSecundario == null) {
-                  return const SizedBox.shrink();
-                }
-                final isSecundary = r.watch(viewAsSecundaryProvider);
-                final outroRole =
-                    isSecundary ? user.role : user.roleSecundario!;
-                return IconButton(
-                  icon: Icon(
-                    outroRole.isDashboard
-                        ? Icons.admin_panel_settings_rounded
-                        : Icons.school_rounded,
-                    color: isSecundary ? AppColors.secondary : null,
-                  ),
-                  tooltip: 'Ver como ${outroRole.cargo}',
-                  onPressed: () {
-                    final novo = !isSecundary;
-                    r.read(viewAsSecundaryProvider.notifier).state = novo;
-                    final destinoRole =
-                        novo ? user.roleSecundario! : user.role;
-                    context.go(homeRouteFor(destinoRole));
-                  },
-                );
-              },
-              orElse: () => const SizedBox.shrink(),
-            );
-          }),
+          _ToggleRoleButton(),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Sair',
@@ -98,34 +99,83 @@ class DemandasListScreen extends ConsumerWidget {
               children: [
                 const SaudacaoHeader(),
                 const Divider(height: 1),
-
-                // ── Filtro de status ───────────────────────────────────────
-                async.when(
-                  data: (demandas) => _FilterBar(demandas: demandas),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
-
-                // ── Lista com seções ───────────────────────────────────────
                 Expanded(
                   child: async.when(
-                    loading: () => const _LoadingState(),
-                    error: (e, _) => _ErrorState(
-                      onRetry: () => ref.invalidate(demandasProvider),
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.primary, strokeWidth: 2.5),
+                    ),
+                    error: (_, __) => Center(
+                      child: FilledButton.icon(
+                        onPressed: () => ref.invalidate(demandasProvider),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Tentar novamente'),
+                      ),
                     ),
                     data: (demandas) {
-                      final filtradas = filtro == null
-                          ? demandas
-                          : demandas
-                              .where((d) => d.status == filtro)
-                              .toList();
+                      // Agrupa para saber quais seções existem
+                      final gerais = _filtrarSecao(demandas, 'gerais');
+                      final secoes = <(String, List<Demanda>)>[];
+                      if (gerais.isNotEmpty) secoes.add(('gerais', gerais));
+                      for (final t in _turnoOrdem) {
+                        final ds = _filtrarSecao(demandas, t);
+                        if (ds.isNotEmpty) secoes.add((t, ds));
+                      }
 
                       return RefreshIndicator(
                         color: AppColors.primary,
                         onRefresh: () => ref.refresh(demandasProvider.future),
-                        child: filtradas.isEmpty
-                            ? _EmptyState(filtro: filtro)
-                            : _DemandasAgrupadas(demandas: filtradas),
+                        child: secoes.isEmpty
+                            ? ListView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                children: [
+                                  SizedBox(
+                                    height: MediaQuery.of(context).size.height *
+                                        0.5,
+                                    child: const Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.inbox_rounded,
+                                            size: 56,
+                                            color: AppColors.textHint),
+                                        SizedBox(height: 16),
+                                        Text(
+                                          'Nenhuma demanda no momento.\nPuxe para atualizar.',
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : GridView.count(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                padding: const EdgeInsets.all(16),
+                                children: secoes.map((entry) {
+                                  final (secao, ds) = entry;
+                                  final pendentes = ds
+                                      .where((d) =>
+                                          d.status == StatusDemanda.pendente)
+                                      .length;
+                                  return _TurnoCard(
+                                    secao: secao,
+                                    total: ds.length,
+                                    pendentes: pendentes,
+                                    onTap: () {
+                                      ref
+                                          .read(filtroProvider.notifier)
+                                          .state = null;
+                                      ref
+                                          .read(turnoSelecionadoProvider
+                                              .notifier)
+                                          .state = secao;
+                                    },
+                                  );
+                                }).toList(),
+                              ),
                       );
                     },
                   ),
@@ -135,6 +185,296 @@ class DemandasListScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Card de turno ────────────────────────────────────────────────────────────
+
+class _TurnoCard extends StatelessWidget {
+  final String secao;
+  final int total;
+  final int pendentes;
+  final VoidCallback onTap;
+  const _TurnoCard({
+    required this.secao,
+    required this.total,
+    required this.pendentes,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _turnoLabels[secao] ?? secao;
+    final icon = _turnoIcons[secao] ?? Icons.grid_view_rounded;
+    final temPendentes = pendentes > 0;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Material(
+        color: AppColors.surface,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: temPendentes
+                    ? AppColors.primary.withValues(alpha: 0.35)
+                    : AppColors.divider,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(icon, size: 20, color: AppColors.primary),
+                    ),
+                    const Spacer(),
+                    if (temPendentes)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '$pendentes',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$total ${total == 1 ? 'demanda' : 'demandas'}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Tela de demandas (com ou sem filtro de turno) ───────────────────────────
+
+class _DemandasScreen extends ConsumerWidget {
+  final String? turnoFiltro;
+  final bool useTurnoCards;
+  const _DemandasScreen({
+    required this.turnoFiltro,
+    required this.useTurnoCards,
+  });
+
+  void _voltar(WidgetRef ref) {
+    ref.read(filtroProvider.notifier).state = null;
+    ref.read(turnoSelecionadoProvider.notifier).state = null;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(demandasProvider);
+    final filtro = ref.watch(filtroProvider);
+
+    final tituloLabel = turnoFiltro != null
+        ? (_turnoLabels[turnoFiltro] ?? turnoFiltro!)
+        : null;
+    final tituloIcon =
+        turnoFiltro != null ? _turnoIcons[turnoFiltro] : null;
+
+    return PopScope(
+      canPop: !useTurnoCards,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _voltar(ref);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          leading: useTurnoCards
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: () => _voltar(ref),
+                )
+              : null,
+          title: useTurnoCards
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (tituloIcon != null) ...[
+                      Icon(tituloIcon, size: 18),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(tituloLabel ?? ''),
+                  ],
+                )
+              : Image.asset(
+                  'assets/images/logo.png',
+                  height: 36,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.centerLeft,
+                ),
+          actions: [
+            if (!useTurnoCards) _ToggleRoleButton(),
+            IconButton(
+              icon: const Icon(Icons.logout_rounded),
+              tooltip: 'Sair',
+              onPressed: () async => AuthService.logout(),
+            ),
+          ],
+        ),
+        body: PwaInstallBanner(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: Column(
+                children: [
+                  if (!useTurnoCards) ...[
+                    const SaudacaoHeader(),
+                    const Divider(height: 1),
+                  ],
+
+                  // Filtro de status
+                  async.when(
+                    data: (demandas) {
+                      final visiveis = turnoFiltro != null
+                          ? _filtrarSecao(demandas, turnoFiltro!)
+                          : demandas;
+                      return _FilterBar(demandas: visiveis);
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+
+                  // Lista
+                  Expanded(
+                    child: async.when(
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary, strokeWidth: 2.5),
+                      ),
+                      error: (_, __) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.wifi_off_rounded,
+                                  size: 48, color: AppColors.textHint),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Não foi possível carregar\nas demandas.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyLarge
+                                    ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        height: 1.6),
+                              ),
+                              const SizedBox(height: 24),
+                              FilledButton.icon(
+                                onPressed: () =>
+                                    ref.invalidate(demandasProvider),
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Tentar novamente'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      data: (demandas) {
+                        var filtradas = turnoFiltro != null
+                            ? _filtrarSecao(demandas, turnoFiltro!)
+                            : demandas;
+                        if (filtro != null) {
+                          filtradas = filtradas
+                              .where((d) => d.status == filtro)
+                              .toList();
+                        }
+
+                        return RefreshIndicator(
+                          color: AppColors.primary,
+                          onRefresh: () =>
+                              ref.refresh(demandasProvider.future),
+                          child: filtradas.isEmpty
+                              ? _EmptyState(filtro: filtro)
+                              : _DemandaList(demandas: filtradas),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Toggle duplo acesso (extraído para evitar repetição) ────────────────────
+
+class _ToggleRoleButton extends ConsumerWidget {
+  const _ToggleRoleButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(currentUserProvider);
+    return userAsync.maybeWhen(
+      data: (user) {
+        if (user == null ||
+            !user.temDuploAcesso ||
+            user.roleSecundario == null) {
+          return const SizedBox.shrink();
+        }
+        final isSecundary = ref.watch(viewAsSecundaryProvider);
+        final outroRole = isSecundary ? user.role : user.roleSecundario!;
+        return IconButton(
+          icon: Icon(
+            outroRole.isDashboard
+                ? Icons.admin_panel_settings_rounded
+                : Icons.school_rounded,
+            color: isSecundary ? AppColors.secondary : null,
+          ),
+          tooltip: 'Ver como ${outroRole.cargo}',
+          onPressed: () {
+            final novo = !isSecundary;
+            ref.read(viewAsSecundaryProvider.notifier).state = novo;
+            ref.read(turnoSelecionadoProvider.notifier).state = null;
+            context.go(homeRouteFor(novo ? user.roleSecundario! : user.role));
+          },
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
     );
   }
 }
@@ -172,7 +512,6 @@ class _FilterBar extends ConsumerWidget {
                 final (label, status) = entry;
                 final active = filtro == status;
                 final count = _count(status);
-
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
@@ -205,105 +544,20 @@ class _FilterBar extends ConsumerWidget {
   }
 }
 
-// ─── Lista agrupada por seções ────────────────────────────────────────────────
+// ─── List ────────────────────────────────────────────────────────────────────
 
-class _DemandasAgrupadas extends StatelessWidget {
+class _DemandaList extends StatelessWidget {
   final List<Demanda> demandas;
-  const _DemandasAgrupadas({required this.demandas});
+  const _DemandaList({required this.demandas});
 
   @override
   Widget build(BuildContext context) {
-    // Gerais: tudo que não é turma com turno definido
-    final gerais = <Demanda>[];
-    final porTurno = <String, List<Demanda>>{};
-
-    for (final d in demandas) {
-      if (d.tipo == TipoDemanda.turma && d.turno != null) {
-        porTurno.putIfAbsent(d.turno!, () => []).add(d);
-      } else {
-        gerais.add(d);
-      }
-    }
-
-    return ListView(
+    return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [
-        if (gerais.isNotEmpty) ...[
-          _SecaoHeader(
-            icon: Icons.grid_view_rounded,
-            label: 'Gerais',
-            count: gerais.length,
-          ),
-          const SizedBox(height: 10),
-          ...gerais.map((d) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _DemandaCard(demanda: d),
-              )),
-        ],
-        for (final turno in _turnoOrdem)
-          if (porTurno[turno]?.isNotEmpty ?? false) ...[
-            if (gerais.isNotEmpty || _turnoOrdem.indexOf(turno) > 0)
-              const SizedBox(height: 8),
-            _SecaoHeader(
-              icon: _turnoIcons[turno]!,
-              label: _turnoLabels[turno]!,
-              count: porTurno[turno]!.length,
-            ),
-            const SizedBox(height: 10),
-            ...porTurno[turno]!.map((d) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _DemandaCard(demanda: d),
-                )),
-          ],
-      ],
-    );
-  }
-}
-
-// ─── Cabeçalho de seção ───────────────────────────────────────────────────────
-
-class _SecaoHeader extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int count;
-  const _SecaoHeader({
-    required this.icon,
-    required this.label,
-    required this.count,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 15, color: AppColors.textSecondary),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            '$count',
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
-          ),
-        ),
-      ],
+      itemCount: demandas.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, i) => _DemandaCard(demanda: demandas[i]),
     );
   }
 }
@@ -317,7 +571,9 @@ class _DemandaCard extends StatelessWidget {
   bool get _isDaGestao {
     final role = demanda.criadoPorRole;
     return role != null &&
-        (role == 'diretor' || role == 'diretor-adjunto' || role == 'secretaria');
+        (role == 'diretor' ||
+            role == 'diretor-adjunto' ||
+            role == 'secretaria');
   }
 
   @override
@@ -339,10 +595,7 @@ class _DemandaCard extends StatelessWidget {
             )
           : null,
       child: InkWell(
-        onTap: () => context.push(
-          'demanda/${demanda.id}',
-          extra: demanda,
-        ),
+        onTap: () => context.push('demanda/${demanda.id}', extra: demanda),
         borderRadius: BorderRadius.circular(16),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
@@ -422,15 +675,13 @@ class _PriorityBar extends StatelessWidget {
   const _PriorityBar({required this.prioridade});
 
   Color get _color => switch (prioridade) {
-        PrioridadeDemanda.alta => AppColors.error,
+        PrioridadeDemanda.alta  => AppColors.error,
         PrioridadeDemanda.media => AppColors.warning,
         PrioridadeDemanda.baixa => AppColors.primary,
       };
 
   @override
-  Widget build(BuildContext context) {
-    return Container(width: 4, color: _color);
-  }
+  Widget build(BuildContext context) => Container(width: 4, color: _color);
 }
 
 class _StatusBadge extends StatelessWidget {
@@ -441,9 +692,11 @@ class _StatusBadge extends StatelessWidget {
         StatusDemanda.pendente =>
           (AppColors.statusPendente, 'Pendente', Icons.schedule_rounded),
         StatusDemanda.visualizada =>
-          (AppColors.statusVisualizada, 'Visualizada', Icons.visibility_rounded),
+          (AppColors.statusVisualizada, 'Visualizada',
+              Icons.visibility_rounded),
         StatusDemanda.concluida =>
-          (AppColors.statusConcluida, 'Concluída', Icons.check_circle_rounded),
+          (AppColors.statusConcluida, 'Concluída',
+              Icons.check_circle_rounded),
       };
 
   @override
@@ -460,14 +713,11 @@ class _StatusBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: color)),
         ],
       ),
     );
@@ -485,13 +735,10 @@ class _TurmaChip extends StatelessWidget {
     final bg = isIndividual
         ? AppColors.primary.withValues(alpha: 0.12)
         : AppColors.surfaceVariant;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -499,14 +746,12 @@ class _TurmaChip extends StatelessWidget {
             Icon(Icons.person_rounded, size: 12, color: fg),
             const SizedBox(width: 4),
           ],
-          Text(
-            turma,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isIndividual ? FontWeight.w600 : FontWeight.w500,
-              color: fg,
-            ),
-          ),
+          Text(turma,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight:
+                      isIndividual ? FontWeight.w600 : FontWeight.w500,
+                  color: fg)),
         ],
       ),
     );
@@ -529,14 +774,11 @@ class _GestaoChip extends StatelessWidget {
         children: [
           Icon(Icons.domain_rounded, size: 11, color: AppColors.primaryDark),
           const SizedBox(width: 4),
-          Text(
-            'Da Gestão',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primaryDark,
-            ),
-          ),
+          Text('Da Gestão',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primaryDark)),
         ],
       ),
     );
@@ -556,7 +798,6 @@ class _PrazoLabel extends StatelessWidget {
         : atrasada
             ? AppColors.error
             : AppColors.textSecondary;
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -584,20 +825,6 @@ class _PrazoLabel extends StatelessWidget {
 
 // ─── States ──────────────────────────────────────────────────────────────────
 
-class _LoadingState extends StatelessWidget {
-  const _LoadingState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: AppColors.primary,
-        strokeWidth: 2.5,
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   final StatusDemanda? filtro;
   const _EmptyState({this.filtro});
@@ -621,7 +848,7 @@ class _EmptyState extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
         SizedBox(
-          height: MediaQuery.of(context).size.height * 0.45,
+          height: MediaQuery.of(context).size.height * 0.5,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -639,42 +866,6 @@ class _EmptyState extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  final VoidCallback onRetry;
-  const _ErrorState({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.wifi_off_rounded,
-                size: 48, color: AppColors.textHint),
-            const SizedBox(height: 16),
-            Text(
-              'Não foi possível carregar\nas demandas.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.6,
-                  ),
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Tentar novamente'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
