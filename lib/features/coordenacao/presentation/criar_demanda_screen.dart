@@ -24,8 +24,8 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
   DateTime? _prazo;
 
   // Seleções condicionais
-  Turma?         _turmaSelecionada;
-  ProfessorItem? _professorSelecionado;
+  Turma?              _turmaSelecionada;
+  List<ProfessorItem> _professoresSelecionados = [];
 
   // Anexos selecionados antes de enviar
   final List<PlatformFile> _arquivos = [];
@@ -44,7 +44,7 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
     if (_prazo == null) return false;
     if (_enviando) return false;
     if (_tipo == 'turma' && _turmaSelecionada == null) return false;
-    if (_tipo == 'individual' && _professorSelecionado == null) return false;
+    if (_tipo == 'individual' && _professoresSelecionados.isEmpty) return false;
     return true;
   }
 
@@ -122,7 +122,7 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
         turmaId:      _turmaSelecionada?.id,
         turmaNome:    _turmaSelecionada?.nome,
         turnoFiltro:  _turmaSelecionada?.turno.dbValue,
-        professorId:  _professorSelecionado?.id,
+        professorIds: _professoresSelecionados.map((p) => p.id).toList(),
       );
 
       // Upload dos arquivos selecionados (se houver)
@@ -183,8 +183,8 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
                     showGestao: showGestao,
                     onChanged: (v) => setState(() {
                       _tipo = v;
-                      _turmaSelecionada    = null;
-                      _professorSelecionado = null;
+                      _turmaSelecionada        = null;
+                      _professoresSelecionados  = [];
                     }),
                   ),
                   const SizedBox(height: 20),
@@ -277,14 +277,18 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
                     _Label('Professor'),
                     const SizedBox(height: 4),
                     Text(
-                      'Selecione o professor',
+                      'Selecione um ou mais professores',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 10),
                     _ProfessorPicker(
-                      selecionado: _professorSelecionado,
+                      selecionados: _professoresSelecionados,
                       onChanged: (p) => setState(() {
-                        _professorSelecionado = p;
+                        if (_professoresSelecionados.any((x) => x.id == p.id)) {
+                          _professoresSelecionados.removeWhere((x) => x.id == p.id);
+                        } else {
+                          _professoresSelecionados.add(p);
+                        }
                       }),
                     ),
                   ],
@@ -719,10 +723,10 @@ class _TurmaPicker extends ConsumerWidget {
 // ─── Professor picker ─────────────────────────────────────────────────────────
 
 class _ProfessorPicker extends ConsumerWidget {
-  final ProfessorItem? selecionado;
-  final ValueChanged<ProfessorItem?> onChanged;
+  final List<ProfessorItem> selecionados;
+  final ValueChanged<ProfessorItem> onChanged;
 
-  const _ProfessorPicker({required this.selecionado, required this.onChanged});
+  const _ProfessorPicker({required this.selecionados, required this.onChanged});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -746,11 +750,11 @@ class _ProfessorPicker extends ConsumerWidget {
         spacing: 8,
         runSpacing: 8,
         children: professores.map((p) {
-          final sel = selecionado?.id == p.id;
+          final sel = selecionados.any((x) => x.id == p.id);
           return FilterChip(
             label: Text(p.nome),
             selected: sel,
-            onSelected: (_) => onChanged(sel ? null : p),
+            onSelected: (_) => onChanged(p),
             selectedColor: AppColors.primary,
             backgroundColor: AppColors.surfaceVariant,
             labelStyle: TextStyle(
@@ -758,7 +762,7 @@ class _ProfessorPicker extends ConsumerWidget {
               fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
               color: sel ? AppColors.surface : AppColors.textSecondary,
             ),
-            showCheckmark: false,
+            showCheckmark: true,
             side: BorderSide(
               color: sel ? AppColors.primary : Colors.transparent,
             ),
