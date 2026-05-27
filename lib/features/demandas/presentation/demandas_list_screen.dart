@@ -11,21 +11,21 @@ import '../../auth/services/auth_service.dart';
 import '../domain/demanda.dart';
 import 'demandas_providers.dart';
 
-/// Regras de filtragem por turno:
-/// - `filtroTurno == null` (aba "Todos") → mostra todas as demandas do professor.
-/// - `filtroTurno == "matutino"` (ou outro) → mostra:
-///     • Demandas explicitamente daquele turno
-///     • Demandas gerais (para todos) — porque valem para qualquer turno
-///   Demandas individuais (que vêm sem turno) NÃO aparecem em filtros de turno —
-///   só na aba "Todos", para evitar duplicação e dar significado real ao filtro.
-List<Demanda> _filtrarPorTurno(List<Demanda> demandas, String? filtroTurno) {
-  if (filtroTurno == null) return demandas;
-  return demandas.where((d) {
-    if (d.turno == filtroTurno) return true;
-    if (d.tipo == TipoDemanda.geral) return true;
-    return false;
-  }).toList();
-}
+const _turnoOrdem = ['matutino', 'vespertino', 'integral', 'noturno'];
+
+const _turnoLabels = {
+  'matutino':   'Matutino',
+  'vespertino': 'Vespertino',
+  'integral':   'Integral',
+  'noturno':    'Noturno',
+};
+
+const _turnoIcons = {
+  'matutino':   Icons.wb_sunny_rounded,
+  'vespertino': Icons.wb_twilight_rounded,
+  'integral':   Icons.brightness_5_rounded,
+  'noturno':    Icons.nights_stay_rounded,
+};
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -34,16 +34,12 @@ class DemandasListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Recebe nova demanda com app aberto → atualiza lista automaticamente
     ref.listen(fcmForegroundProvider, (_, next) {
       next.whenData((_) => ref.invalidate(demandasProvider));
     });
 
-    final async      = ref.watch(demandasProvider);
-    final filtro     = ref.watch(filtroProvider);
-    final filtroTurno = ref.watch(filtroTurnoProvider);
-    final turnosAsync = ref.watch(turnosProfessorProvider);
-    final turnos     = turnosAsync.valueOrNull ?? [];
+    final async  = ref.watch(demandasProvider);
+    final filtro = ref.watch(filtroProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -55,7 +51,6 @@ class DemandasListScreen extends ConsumerWidget {
           alignment: Alignment.centerLeft,
         ),
         actions: [
-          // Toggle para usuário com duplo acesso
           Consumer(builder: (ctx, r, _) {
             final userAsync = r.watch(currentUserProvider);
             return userAsync.maybeWhen(
@@ -66,7 +61,6 @@ class DemandasListScreen extends ConsumerWidget {
                   return const SizedBox.shrink();
                 }
                 final isSecundary = r.watch(viewAsSecundaryProvider);
-                // Cargo "alternativo" — o que está NÃO sendo visto agora
                 final outroRole =
                     isSecundary ? user.role : user.roleSecundario!;
                 return IconButton(
@@ -100,117 +94,45 @@ class DemandasListScreen extends ConsumerWidget {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 900),
-          child: Column(
-            children: [
-              const SaudacaoHeader(),
-              const Divider(height: 1),
+            child: Column(
+              children: [
+                const SaudacaoHeader(),
+                const Divider(height: 1),
 
-              // ── Abas de turno (se o professor tem múltiplos turnos) ────────
-              if (turnos.length > 1) _TurnoTabBar(turnos: turnos),
+                // ── Filtro de status ───────────────────────────────────────
+                async.when(
+                  data: (demandas) => _FilterBar(demandas: demandas),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
 
-              // ── Filtro de status ───────────────────────────────────────────
-              async.when(
-                data: (demandas) {
-                  final porTurno = _filtrarPorTurno(demandas, filtroTurno);
-                  return _FilterBar(demandas: porTurno);
-                },
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-              ),
+                // ── Lista com seções ───────────────────────────────────────
+                Expanded(
+                  child: async.when(
+                    loading: () => const _LoadingState(),
+                    error: (e, _) => _ErrorState(
+                      onRetry: () => ref.invalidate(demandasProvider),
+                    ),
+                    data: (demandas) {
+                      final filtradas = filtro == null
+                          ? demandas
+                          : demandas
+                              .where((d) => d.status == filtro)
+                              .toList();
 
-              // ── Lista ──────────────────────────────────────────────────────
-              Expanded(
-                child: async.when(
-                  loading: () => const _LoadingState(),
-                  error: (e, _) => _ErrorState(
-                    onRetry: () => ref.invalidate(demandasProvider),
+                      return RefreshIndicator(
+                        color: AppColors.primary,
+                        onRefresh: () => ref.refresh(demandasProvider.future),
+                        child: filtradas.isEmpty
+                            ? _EmptyState(filtro: filtro)
+                            : _DemandasAgrupadas(demandas: filtradas),
+                      );
+                    },
                   ),
-                  data: (demandas) {
-                    // Aplica filtro de turno (regras em _filtrarPorTurno)
-                    var filtradas = _filtrarPorTurno(demandas, filtroTurno);
-                    if (filtro != null) {
-                      filtradas = filtradas
-                          .where((d) => d.status == filtro)
-                          .toList();
-                    }
-
-                    return RefreshIndicator(
-                      color: AppColors.primary,
-                      onRefresh: () => ref.refresh(demandasProvider.future),
-                      child: filtradas.isEmpty
-                          ? _EmptyState(filtro: filtro)
-                          : _DemandaList(demandas: filtradas),
-                    );
-                  },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Barra de abas por turno ──────────────────────────────────────────────────
-
-class _TurnoTabBar extends ConsumerWidget {
-  final List<String> turnos;
-  const _TurnoTabBar({required this.turnos});
-
-  static const _labels = {
-    'matutino':   'Matutino',
-    'vespertino': 'Vespertino',
-    'integral':   'Integral',
-    'noturno':    'Noturno',
-  };
-
-  static const _icons = {
-    'matutino':   Icons.wb_sunny_rounded,
-    'vespertino': Icons.wb_twilight_rounded,
-    'integral':   Icons.brightness_5_rounded,
-    'noturno':    Icons.nights_stay_rounded,
-  };
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final filtroTurno = ref.watch(filtroTurnoProvider);
-    final allTurnos = [null, ...turnos];
-
-    return Container(
-      color: AppColors.surface,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-        child: Row(
-          children: allTurnos.map((t) {
-            final ativo = filtroTurno == t;
-            final label = t == null ? 'Todos' : (_labels[t] ?? t);
-            final icon  = t == null ? Icons.grid_view_rounded : _icons[t];
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                avatar: icon != null ? Icon(icon, size: 14) : null,
-                label: Text(label),
-                selected: ativo,
-                onSelected: (_) =>
-                    ref.read(filtroTurnoProvider.notifier).state = t,
-                selectedColor: AppColors.primary,
-                backgroundColor: AppColors.surfaceVariant,
-                labelStyle: TextStyle(
-                  fontSize: 13,
-                  fontWeight: ativo ? FontWeight.w600 : FontWeight.w400,
-                  color: ativo ? AppColors.surface : AppColors.textSecondary,
-                ),
-                showCheckmark: false,
-                side: BorderSide(
-                  color: ativo ? AppColors.primary : Colors.transparent,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-              ),
-            );
-          }).toList(),
         ),
       ),
     );
@@ -283,20 +205,105 @@ class _FilterBar extends ConsumerWidget {
   }
 }
 
-// ─── List ────────────────────────────────────────────────────────────────────
+// ─── Lista agrupada por seções ────────────────────────────────────────────────
 
-class _DemandaList extends StatelessWidget {
+class _DemandasAgrupadas extends StatelessWidget {
   final List<Demanda> demandas;
-  const _DemandaList({required this.demandas});
+  const _DemandasAgrupadas({required this.demandas});
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
+    // Gerais: tudo que não é turma com turno definido
+    final gerais = <Demanda>[];
+    final porTurno = <String, List<Demanda>>{};
+
+    for (final d in demandas) {
+      if (d.tipo == TipoDemanda.turma && d.turno != null) {
+        porTurno.putIfAbsent(d.turno!, () => []).add(d);
+      } else {
+        gerais.add(d);
+      }
+    }
+
+    return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      itemCount: demandas.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) => _DemandaCard(demanda: demandas[i]),
+      children: [
+        if (gerais.isNotEmpty) ...[
+          _SecaoHeader(
+            icon: Icons.grid_view_rounded,
+            label: 'Gerais',
+            count: gerais.length,
+          ),
+          const SizedBox(height: 10),
+          ...gerais.map((d) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _DemandaCard(demanda: d),
+              )),
+        ],
+        for (final turno in _turnoOrdem)
+          if (porTurno[turno]?.isNotEmpty ?? false) ...[
+            if (gerais.isNotEmpty || _turnoOrdem.indexOf(turno) > 0)
+              const SizedBox(height: 8),
+            _SecaoHeader(
+              icon: _turnoIcons[turno]!,
+              label: _turnoLabels[turno]!,
+              count: porTurno[turno]!.length,
+            ),
+            const SizedBox(height: 10),
+            ...porTurno[turno]!.map((d) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _DemandaCard(demanda: d),
+                )),
+          ],
+      ],
+    );
+  }
+}
+
+// ─── Cabeçalho de seção ───────────────────────────────────────────────────────
+
+class _SecaoHeader extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int count;
+  const _SecaoHeader({
+    required this.icon,
+    required this.label,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: AppColors.textSecondary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -307,13 +314,18 @@ class _DemandaCard extends StatelessWidget {
   final Demanda demanda;
   const _DemandaCard({required this.demanda});
 
+  bool get _isDaGestao {
+    final role = demanda.criadoPorRole;
+    return role != null &&
+        (role == 'diretor' || role == 'diretor-adjunto' || role == 'secretaria');
+  }
+
   @override
   Widget build(BuildContext context) {
     final concluida = demanda.status == StatusDemanda.concluida;
     final isIndividual = demanda.tipo == TipoDemanda.individual;
 
     return Card(
-      // Destaque sutil para demandas individuais
       color: isIndividual
           ? AppColors.primary.withValues(alpha: 0.05)
           : null,
@@ -327,9 +339,6 @@ class _DemandaCard extends StatelessWidget {
             )
           : null,
       child: InkWell(
-        // Caminho relativo: se está em /professor → /professor/demanda/X,
-        // se está em /coordenacao/recebidas → /coordenacao/recebidas/demanda/X.
-        // Mantém o "voltar" coerente com a tela de origem.
         onTap: () => context.push(
           'demanda/${demanda.id}',
           extra: demanda,
@@ -387,6 +396,10 @@ class _DemandaCard extends StatelessWidget {
                               turma: demanda.turma,
                               isIndividual: isIndividual,
                             ),
+                            if (_isDaGestao) ...[
+                              const SizedBox(width: 6),
+                              const _GestaoChip(),
+                            ],
                             const Spacer(),
                             _PrazoLabel(demanda: demanda),
                           ],
@@ -500,6 +513,36 @@ class _TurmaChip extends StatelessWidget {
   }
 }
 
+class _GestaoChip extends StatelessWidget {
+  const _GestaoChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.domain_rounded, size: 11, color: AppColors.primaryDark),
+          const SizedBox(width: 4),
+          Text(
+            'Da Gestão',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primaryDark,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PrazoLabel extends StatelessWidget {
   final Demanda demanda;
   const _PrazoLabel({required this.demanda});
@@ -529,7 +572,8 @@ class _PrazoLabel extends StatelessWidget {
           demanda.prazoLabel,
           style: TextStyle(
             fontSize: 12,
-            fontWeight: atrasada && !concluida ? FontWeight.w600 : FontWeight.w400,
+            fontWeight:
+                atrasada && !concluida ? FontWeight.w600 : FontWeight.w400,
             color: color,
           ),
         ),
@@ -611,7 +655,8 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textHint),
+            const Icon(Icons.wifi_off_rounded,
+                size: 48, color: AppColors.textHint),
             const SizedBox(height: 16),
             Text(
               'Não foi possível carregar\nas demandas.',

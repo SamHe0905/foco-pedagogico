@@ -8,22 +8,7 @@ class DemandasService {
   static String get _userId => _auth.currentUser!.id;
 
   static const _select =
-      'status, demandas(id, titulo, descricao, turma, tipo, turno, prazo, prioridade, criada_em)';
-
-  /// Retorna os turnos distintos das turmas deste professor.
-  static Future<List<String>> getTurnosDoProfessor() async {
-    final data = await _db
-        .from('professor_turmas')
-        .select('turmas(turno)')
-        .eq('professor_id', _userId);
-
-    final turnos = <String>{};
-    for (final row in data as List) {
-      final t = (row['turmas'] as Map<String, dynamic>?)?['turno'] as String?;
-      if (t != null) turnos.add(t);
-    }
-    return turnos.toList();
-  }
+      'status, demandas(id, titulo, descricao, turma, tipo, turno, prazo, prioridade, criada_em, criada_por)';
 
   // ── Lista todas as demandas do professor logado ───────────────────────────
 
@@ -33,9 +18,42 @@ class DemandasService {
         .select(_select)
         .eq('professor_id', _userId);
 
-    final demandas = (data as List)
-        .map((row) => Demanda.fromSupabaseRow(row as Map<String, dynamic>))
+    final rows = data as List;
+
+    // Coleta IDs únicos dos criadores para buscar seus roles (badge "Da Gestão")
+    final creatorIds = rows
+        .map((r) => ((r as Map)['demandas'] as Map)['criada_por'] as String?)
+        .whereType<String>()
+        .toSet()
         .toList();
+
+    // Busca roles dos criadores em lote (silenciosamente ignora erros de permissão)
+    final roleMap = <String, String>{};
+    if (creatorIds.isNotEmpty) {
+      try {
+        final perfis = await _db
+            .from('profiles')
+            .select('id, role')
+            .inFilter('id', creatorIds);
+        for (final p in perfis as List) {
+          roleMap[p['id'] as String] = p['role'] as String;
+        }
+      } catch (_) {
+        // Sem permissão para ler roles: badge não será exibido
+      }
+    }
+
+    // Injeta criada_por_role em cada linha antes de parsear
+    final demandas = rows.map((row) {
+      final map        = Map<String, dynamic>.from(row as Map);
+      final demandaMap = Map<String, dynamic>.from(map['demandas'] as Map);
+      final criadoPor  = demandaMap['criada_por'] as String?;
+      if (criadoPor != null && roleMap.containsKey(criadoPor)) {
+        demandaMap['criada_por_role'] = roleMap[criadoPor];
+      }
+      map['demandas'] = demandaMap;
+      return Demanda.fromSupabaseRow(map);
+    }).toList();
 
     return _sorted(demandas);
   }
