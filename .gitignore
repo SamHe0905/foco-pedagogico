@@ -1,4 +1,5 @@
 # Miscellaneous
+/foco-pedagogico/
 *.class
 *.log
 *.pyc
