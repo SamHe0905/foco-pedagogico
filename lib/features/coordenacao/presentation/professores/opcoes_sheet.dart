@@ -50,7 +50,7 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
 
     setState(() => _salvando = true);
     try {
-      await CoordenacaoService.deletarUsuario(widget.membro.id);
+      await ConvitesService.deletarUsuario(widget.membro.id);
       widget.ref.invalidate(professoresPerfisProvider);
       if (mounted) {
         navigator.pop();
@@ -189,7 +189,7 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
 
     setState(() => _salvando = true);
     try {
-      await CoordenacaoService.alterarCargo(
+      await EquipeService.alterarCargo(
         widget.membro.id,
         novoRole,
         novoRoleSecundario: novoRoleSecundario, // null = remove duplo acesso
@@ -223,7 +223,7 @@ class _OpcoesSheetState extends ConsumerState<_OpcoesSheet> {
   Future<void> _toggleAtivo() async {
     setState(() => _salvando = true);
     try {
-      await CoordenacaoService.toggleAtivoProfessor(
+      await EquipeService.toggleAtivoProfessor(
         widget.membro.id,
         ativo: !widget.membro.ativo,
       );

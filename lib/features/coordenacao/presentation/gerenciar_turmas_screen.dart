@@ -208,7 +208,7 @@ class _TurmaCardState extends ConsumerState<_TurmaCard> {
 
     setState(() => _excluindo = true);
     try {
-      await CoordenacaoService.excluirTurma(widget.turma.id);
+      await TurmasService.excluirTurma(widget.turma.id);
       if (!mounted) return;
       ref.invalidate(turmasProvider);
     } catch (e) {
@@ -416,7 +416,7 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
     setState(() => _salvando = true);
     try {
       if (_editando) {
-        await CoordenacaoService.editarTurma(
+        await TurmasService.editarTurma(
           id:             widget.turma!.id,
           nome:           nome,
           serie:          serie,
@@ -425,7 +425,7 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
           cursoTecnicoId: _cursoTecnicoId,
         );
       } else {
-        await CoordenacaoService.criarTurma(
+        await TurmasService.criarTurma(
           nome:           nome,
           serie:          serie,
           turno:          _turno,

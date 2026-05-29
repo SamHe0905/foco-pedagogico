@@ -44,7 +44,7 @@ class DetalheDemandaCoordenacaoScreen extends ConsumerWidget {
     if (confirmar != true || !context.mounted) return;
 
     try {
-      await CoordenacaoService.excluirDemanda(demandaId);
+      await DemandasCoordenacaoService.excluirDemanda(demandaId);
       ref.invalidate(coordenacaoDemandasProvider);
       if (context.mounted) context.pop();
     } catch (e) {
