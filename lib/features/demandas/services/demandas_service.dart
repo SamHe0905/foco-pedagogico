@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/demanda.dart';
 
@@ -8,7 +9,7 @@ class DemandasService {
   static String get _userId => _auth.currentUser!.id;
 
   static const _select =
-      'status, demandas(id, titulo, descricao, turma, tipo, turno, prazo, prioridade, criada_em, criada_por)';
+      'status, observacao, demandas(id, titulo, descricao, turma, tipo, turno, prazo, prioridade, criada_em, criada_por)';
 
   // ── Lista todas as demandas do professor logado ───────────────────────────
 
@@ -77,15 +78,35 @@ class DemandasService {
 
   // ── Atualiza status da demanda para o professor logado ────────────────────
 
-  static Future<void> atualizarStatus(String id, StatusDemanda novoStatus) async {
+  static Future<void> atualizarStatus(
+    String id,
+    StatusDemanda novoStatus, {
+    String? observacao,
+  }) async {
+    final payload = <String, dynamic>{
+      'status': novoStatus.name,
+      'atualizado_em': DateTime.now().toIso8601String(),
+    };
+    if (observacao != null) payload['observacao'] = observacao.trim();
+
     await _db
         .from('demanda_professor')
-        .update({
-          'status': novoStatus.name,
-          'atualizado_em': DateTime.now().toIso8601String(),
-        })
+        .update(payload)
         .eq('demanda_id', id)
         .eq('professor_id', _userId);
+
+    if (novoStatus == StatusDemanda.concluida) {
+      Future.microtask(() async {
+        try {
+          await _db.functions.invoke(
+            'notify-conclusao',
+            body: {'demanda_id': id},
+          );
+        } catch (e) {
+          debugPrint('[Notify] Erro ao notificar conclusão: $e');
+        }
+      });
+    }
   }
 
   // ── Ordenação: prioridade alta → média → baixa, depois prazo ─────────────

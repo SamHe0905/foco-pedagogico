@@ -44,6 +44,7 @@ serve(async (req) => {
     const autorizado =
       myRole === 'diretor' ||
       myRole === 'diretor-adjunto' ||
+      myRole === 'secretaria' ||
       myRole === 'coordenacao' ||
       myRole === 'supervisor'
 
@@ -58,7 +59,7 @@ serve(async (req) => {
       return json({ error: 'Você não pode excluir sua própria conta.' }, 400)
     }
 
-    // Coordenador não pode deletar diretores
+    // Coordenador não pode deletar membros da gestão
     if (myRole === 'coordenacao' || myRole === 'supervisor') {
       const { data: alvo } = await supabaseAdmin
         .from('profiles')
@@ -67,7 +68,7 @@ serve(async (req) => {
         .single()
 
       const roleAlvo = alvo?.role as string | undefined
-      if (roleAlvo === 'diretor' || roleAlvo === 'diretor-adjunto') {
+      if (roleAlvo === 'diretor' || roleAlvo === 'diretor-adjunto' || roleAlvo === 'secretaria') {
         return json({ error: 'Sem permissão para excluir este usuário.' }, 403)
       }
     }

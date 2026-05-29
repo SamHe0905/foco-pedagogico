@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../features/install/install_dialog.dart';
 import '../../../shared/widgets/pwa_install_banner.dart';
 import '../../../shared/widgets/saudacao_header.dart';
 import '../../auth/domain/usuario.dart';
@@ -74,11 +76,27 @@ class DemandasListScreen extends ConsumerWidget {
 
 // ─── Tela de seleção de turno (cards) ────────────────────────────────────────
 
-class _TurnoSelecaoScreen extends ConsumerWidget {
+class _TurnoSelecaoScreen extends ConsumerStatefulWidget {
   const _TurnoSelecaoScreen();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TurnoSelecaoScreen> createState() =>
+      _TurnoSelecaoScreenState();
+}
+
+class _TurnoSelecaoScreenState extends ConsumerState<_TurnoSelecaoScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) checkAndShowInstallDialog(context);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(demandasProvider);
 
     return Scaffold(
@@ -92,6 +110,11 @@ class _TurnoSelecaoScreen extends ConsumerWidget {
         ),
         actions: [
           _ToggleRoleButton(),
+          IconButton(
+            icon: const Icon(Icons.assignment_outlined),
+            tooltip: 'Minhas Solicitações',
+            onPressed: () => context.push(AppRoutes.minhasSolicitacoes),
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Sair',
@@ -350,6 +373,11 @@ class _DemandasScreen extends ConsumerWidget {
           actions: [
             if (!useTurnoCards) _ToggleRoleButton(),
             IconButton(
+              icon: const Icon(Icons.assignment_outlined),
+              tooltip: 'Minhas Solicitações',
+              onPressed: () => context.push(AppRoutes.minhasSolicitacoes),
+            ),
+            IconButton(
               icon: const Icon(Icons.logout_rounded),
               tooltip: 'Sair',
               onPressed: () async => AuthService.logout(),
@@ -601,7 +629,7 @@ class _DemandaCard extends StatelessWidget {
             )
           : null,
       child: InkWell(
-        onTap: () => context.push('demanda/${demanda.id}', extra: demanda),
+        onTap: () => context.push('/professor/demanda/${demanda.id}', extra: demanda),
         borderRadius: BorderRadius.circular(16),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),

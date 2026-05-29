@@ -112,72 +112,62 @@ class _BannerCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           elevation: 6,
           shadowColor: Colors.black26,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.install_mobile_rounded,
-                      color: AppColors.primary, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Adicione à tela inicial',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        isIOS
-                            ? 'Toque em Compartilhar ↑ → "Adicionar à Tela de Início".'
-                            : isAndroid && !hasPrompt
-                                ? 'Toque nos 3 pontos ⋮ → "Adicionar à tela inicial".'
-                                : hasPrompt
-                                    ? 'Acesse mais rápido e receba notificações.'
-                                    : 'No menu do navegador, escolha "Instalar app".',
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.textSecondary),
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                if (!isIOS && hasPrompt)
-                  TextButton(
-                    onPressed: onInstall,
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: (!isIOS && hasPrompt) ? onInstall : onDismiss,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text('Instalar',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13)),
+                    child: const Icon(Icons.install_mobile_rounded,
+                        color: AppColors.primary, size: 22),
                   ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded,
-                      size: 20, color: AppColors.textHint),
-                  onPressed: onDismiss,
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Adicione à tela inicial',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isIOS
+                              ? 'Toque em Compartilhar ↑ → "Adicionar à Tela de Início".'
+                              : hasPrompt
+                                  ? 'Toque aqui para instalar o app.'
+                                  : 'No menu do navegador, escolha "Instalar app".',
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary),
+                          maxLines: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // X para fechar — sempre visível
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        size: 20, color: AppColors.textHint),
+                    onPressed: onDismiss,
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 36, minHeight: 36),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

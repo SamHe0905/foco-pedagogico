@@ -56,14 +56,104 @@ class _DemandaDetailScreenState extends ConsumerState<DemandaDetailScreen> {
   }
 
   Future<void> _marcarConcluida() async {
+    final observacao = await _pedirObservacao();
+    if (!mounted) return;
+
     setState(() => _atualizando = true);
-    await DemandasService.atualizarStatus(widget.demandaId, StatusDemanda.concluida);
+    await DemandasService.atualizarStatus(
+      widget.demandaId,
+      StatusDemanda.concluida,
+      observacao: observacao,
+    );
     if (!mounted) return;
     setState(() {
-      _demanda = _demanda?.copyWith(status: StatusDemanda.concluida);
+      _demanda = _demanda?.copyWith(
+        status: StatusDemanda.concluida,
+        observacao: observacao,
+      );
       _atualizando = false;
     });
     ref.invalidate(demandasProvider);
+  }
+
+  Future<String?> _pedirObservacao() async {
+    final ctrl = TextEditingController();
+    return showModalBottomSheet<String?>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Observação (opcional)',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Deixe uma nota sobre como foi realizada a demanda.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                maxLines: 3,
+                maxLength: 300,
+                decoration: const InputDecoration(
+                  hintText: 'Ex: atividade aplicada na 2ª feira...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(ctx, ctrl.text.trim().isEmpty ? null : ctrl.text.trim()),
+                      icon: const Icon(Icons.check_circle_rounded),
+                      label: const Text('Concluir'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -140,7 +230,7 @@ class _DemandaDetailScreenState extends ConsumerState<DemandaDetailScreen> {
 
                   if (concluida) ...[
                     const SizedBox(height: 32),
-                    _ConcluidaBanner(),
+                    _ConcluidaBanner(observacao: d.observacao),
                   ],
                 ],
               ),
@@ -321,6 +411,9 @@ class _InfoItem extends StatelessWidget {
 }
 
 class _ConcluidaBanner extends StatelessWidget {
+  final String? observacao;
+  const _ConcluidaBanner({this.observacao});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -331,18 +424,36 @@ class _ConcluidaBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.statusConcluida.withValues(alpha: 0.25)),
       ),
-      child: const Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle_rounded, color: AppColors.statusConcluida, size: 20),
-          SizedBox(width: 10),
-          Text(
-            'Demanda concluída',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.statusConcluida,
-            ),
+          const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: AppColors.statusConcluida, size: 20),
+              SizedBox(width: 10),
+              Text(
+                'Demanda concluída',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.statusConcluida,
+                ),
+              ),
+            ],
           ),
+          if (observacao != null && observacao!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+            Text(
+              observacao!,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+          ],
         ],
       ),
     );

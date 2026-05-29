@@ -9,7 +9,7 @@ const corsHeaders = {
 
 // Roles que cada nível pode atribuir
 const ROLES_COORDENADOR = new Set(['professor', 'professor_aee', 'supervisor', 'coordenacao', 'pcsa'])
-const ROLES_DIRETOR     = new Set(['professor', 'professor_aee', 'supervisor', 'coordenacao', 'pcsa', 'diretor', 'diretor-adjunto'])
+const ROLES_DIRETOR     = new Set(['professor', 'professor_aee', 'supervisor', 'coordenacao', 'pcsa', 'diretor', 'diretor-adjunto', 'secretaria'])
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -45,7 +45,7 @@ serve(async (req) => {
       .single()
 
     const myRole     = perfil?.role as string | undefined
-    const isDirector = myRole === 'diretor' || myRole === 'diretor-adjunto'
+    const isDirector = myRole === 'diretor' || myRole === 'diretor-adjunto' || myRole === 'secretaria'
     const isCoordenador = myRole === 'coordenacao' || myRole === 'supervisor' || myRole === 'pcsa'
 
     if (!isDirector && !isCoordenador) {
@@ -81,7 +81,7 @@ serve(async (req) => {
         .single()
 
       const roleAlvo = alvo?.role as string | undefined
-      if (roleAlvo === 'diretor' || roleAlvo === 'diretor-adjunto') {
+      if (roleAlvo === 'diretor' || roleAlvo === 'diretor-adjunto' || roleAlvo === 'secretaria') {
         return json({ error: 'Sem permissão para alterar o cargo deste usuário.' }, 403)
       }
     }

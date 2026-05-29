@@ -17,6 +17,10 @@ import '../../features/coordenacao/presentation/editar_demanda_screen.dart';
 import '../../features/coordenacao/presentation/mural_demandas_screen.dart';
 import '../../features/coordenacao/presentation/professores_screen.dart';
 import '../../features/coordenacao/presentation/gerenciar_turmas_screen.dart';
+import '../../features/coordenacao/presentation/gerenciar_cursos_tecnicos_screen.dart';
+import '../../features/solicitacoes/presentation/nova_solicitacao_screen.dart';
+import '../../features/solicitacoes/presentation/minhas_solicitacoes_screen.dart';
+import '../../features/solicitacoes/presentation/solicitacoes_coordenador_screen.dart';
 
 abstract class AppRoutes {
   static const login                     = '/login';
@@ -24,13 +28,17 @@ abstract class AppRoutes {
   static const authCallback              = '/auth/callback';
   static const criarSenha               = '/criar-senha';
   static const professorHome             = '/professor';
+  static const minhasSolicitacoes        = '/professor/solicitacoes';
+  static const novaSolicitacao           = '/professor/solicitacoes/nova';
   static const coordenacaoDashboard      = '/coordenacao';
   static const criarDemanda              = '/coordenacao/criar';
   static const detalheDemandaCoordenacao = '/coordenacao/demanda/:id';
   static const professores               = '/coordenacao/professores';
   static const muralDemandas             = '/coordenacao/mural';
   static const gerenciarTurmas           = '/coordenacao/turmas';
+  static const gerenciarCursosTecnicos   = '/coordenacao/cursos';
   static const minhasDemandas            = '/coordenacao/recebidas';
+  static const solicitacoesCoordenador   = '/coordenacao/solicitacoes';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -82,6 +90,16 @@ final routerProvider = Provider<GoRouter>((ref) {
               demanda: state.extra as Demanda?,
             ),
           ),
+          GoRoute(
+            path: 'solicitacoes',
+            builder: (context, state) => const MinhasSolicitacoesScreen(),
+            routes: [
+              GoRoute(
+                path: 'nova',
+                builder: (context, state) => const NovaSolicitacaoScreen(),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
@@ -103,6 +121,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'turmas',
             builder: (context, state) => const GerenciarTurmasScreen(),
+          ),
+          GoRoute(
+            path: 'cursos',
+            builder: (context, state) => const GerenciarCursosTecnicosScreen(),
+          ),
+          GoRoute(
+            path: 'solicitacoes',
+            builder: (context, state) => const SolicitacoesCoordenadorScreen(),
           ),
           GoRoute(
             path: 'recebidas',

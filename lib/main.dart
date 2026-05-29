@@ -16,9 +16,7 @@ void main() async {
   // (ex: /auth/callback?code=...) chegarem na rota correta.
   if (kIsWeb) usePathUrlStrategy();
 
-  if (!kIsWeb) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  }
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
@@ -28,9 +26,7 @@ void main() async {
     ),
   );
 
-  if (!kIsWeb) {
-    await NotificationService.initialize();
-  }
+  await NotificationService.initialize();
 
   runApp(
     const ProviderScope(

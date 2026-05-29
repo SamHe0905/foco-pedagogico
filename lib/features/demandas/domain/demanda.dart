@@ -2,7 +2,7 @@ enum StatusDemanda { pendente, visualizada, concluida }
 
 enum PrioridadeDemanda { alta, media, baixa }
 
-enum TipoDemanda { geral, turma, individual, coordenacao }
+enum TipoDemanda { geral, turma, individual, coordenacao, gestao }
 
 class Demanda {
   final String id;
@@ -17,6 +17,9 @@ class Demanda {
   final StatusDemanda status;
   final PrioridadeDemanda prioridade;
   final DateTime criadaEm;
+  /// Role de quem criou esta demanda — usado para o badge "Da Gestão".
+  final String? criadoPorRole;
+  final String? observacao;
 
   const Demanda({
     required this.id,
@@ -29,6 +32,8 @@ class Demanda {
     required this.status,
     required this.prioridade,
     required this.criadaEm,
+    this.criadoPorRole,
+    this.observacao,
   });
 
   // Mapeia uma linha de demanda_professor com demandas embutido
@@ -43,9 +48,11 @@ class Demanda {
         'individual'  => TipoDemanda.individual,
         'turma'       => TipoDemanda.turma,
         'coordenacao' => TipoDemanda.coordenacao,
+        'gestao'      => TipoDemanda.gestao,
         _             => TipoDemanda.geral,
       },
       turno:     d['turno']     as String?,
+      criadoPorRole: d['criada_por_role'] as String?,
       prazo:     DateTime.parse(d['prazo'] as String),
       prioridade: switch (d['prioridade'] as String) {
         'alta'  => PrioridadeDemanda.alta,
@@ -57,22 +64,25 @@ class Demanda {
         'concluida'   => StatusDemanda.concluida,
         _             => StatusDemanda.pendente,
       },
+      observacao: row['observacao'] as String?,
       criadaEm: DateTime.parse(d['criada_em'] as String),
     );
   }
 
-  Demanda copyWith({StatusDemanda? status}) {
+  Demanda copyWith({StatusDemanda? status, String? observacao}) {
     return Demanda(
-      id:        id,
-      titulo:    titulo,
-      descricao: descricao,
-      turma:     turma,
-      tipo:      tipo,
-      turno:     turno,
-      prazo:     prazo,
-      status:    status ?? this.status,
-      prioridade: prioridade,
-      criadaEm:  criadaEm,
+      id:            id,
+      titulo:        titulo,
+      descricao:     descricao,
+      turma:         turma,
+      tipo:          tipo,
+      turno:         turno,
+      prazo:         prazo,
+      status:        status ?? this.status,
+      prioridade:    prioridade,
+      criadaEm:      criadaEm,
+      criadoPorRole: criadoPorRole,
+      observacao:    observacao ?? this.observacao,
     );
   }
 

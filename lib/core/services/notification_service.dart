@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../firebase_options.dart';
 
 /// Handler de mensagens em background/terminated — precisa ser top-level.
 @pragma('vm:entry-point')
@@ -30,21 +31,19 @@ class NotificationService {
   }
 
   static Future<void> initialize() async {
-    if (kIsWeb) return;
+    // No web, onBackgroundMessage não é suportado — o SW (firebase-messaging-sw.js) cuida disso
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    }
 
-    // Registra handler de background (obrigatório antes de qualquer outra coisa)
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-    // Pede permissão (Android 13+ / iOS).
-    // IMPORTANTE: o token pode ser obtido independente da permissão —
-    // a permissão só afeta se a notificação é exibida, não a geração do token.
+    // Pede permissão (Android 13+ / iOS / Web)
     await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    // Salva token ao fazer login (sempre, independente de permissão)
+    // Salva token ao fazer login
     _db.auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         _saveToken();
@@ -54,7 +53,7 @@ class NotificationService {
     // Salva token agora se já estiver autenticado
     await _saveToken();
 
-    // Atualiza token quando ele mudar (FCM recicla tokens periodicamente)
+    // Atualiza token quando ele mudar
     _messaging.onTokenRefresh.listen(_updateToken);
 
     // App em background → usuário tocou na notificação
@@ -63,15 +62,17 @@ class NotificationService {
       if (demandaId != null) _navigateToDemanda(demandaId);
     });
 
-    // App encerrado → abre via toque na notificação
-    final initial = await _messaging.getInitialMessage();
-    if (initial != null) {
-      final demandaId = initial.data['demanda_id'] as String?;
-      if (demandaId != null) {
-        if (_router != null) {
-          _navigateToDemanda(demandaId);
-        } else {
-          _pendingDemandaId = demandaId; // router ainda não está pronto
+    // App encerrado → abre via toque na notificação (não suportado no web)
+    if (!kIsWeb) {
+      final initial = await _messaging.getInitialMessage();
+      if (initial != null) {
+        final demandaId = initial.data['demanda_id'] as String?;
+        if (demandaId != null) {
+          if (_router != null) {
+            _navigateToDemanda(demandaId);
+          } else {
+            _pendingDemandaId = demandaId;
+          }
         }
       }
     }
@@ -85,7 +86,10 @@ class NotificationService {
       debugPrint('[FCM] _saveToken → userId: $userId');
       if (userId == null) return;
 
-      final token = await _messaging.getToken();
+      // No web, getToken() exige a VAPID key para Web Push
+      final token = await _messaging.getToken(
+        vapidKey: kIsWeb ? DefaultFirebaseOptions.vapidKey : null,
+      );
       debugPrint('[FCM] getToken → ${token == null ? 'NULL' : token.substring(0, 20)}...');
       if (token == null) return;
 

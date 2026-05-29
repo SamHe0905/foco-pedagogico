@@ -30,6 +30,7 @@ dependencies:
   url_launcher: ^6.3.1
 
   # UI
+  qr_flutter: ^4.1.0
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
   flutter_localizations:

@@ -64,20 +64,38 @@ class CoordenacaoService {
   // ── Lista de turmas cadastradas ───────────────────────────────────────────
 
   static Future<List<Turma>> getTurmas() async {
-    final data = await _db
-        .from('turmas')
-        .select('id, nome, serie, turno')
-        .order('turno')
-        .order('nome');
+    // Tenta com join; se a tabela cursos_tecnicos ainda não existir, cai no fallback.
+    List rows;
+    bool temCursoJoin = true;
+    try {
+      rows = await _db
+          .from('turmas')
+          .select('id, nome, serie, turno, etapa, curso_tecnico_id, cursos_tecnicos(nome)')
+          .order('turno')
+          .order('nome') as List;
+    } catch (_) {
+      temCursoJoin = false;
+      rows = await _db
+          .from('turmas')
+          .select('id, nome, serie, turno, etapa')
+          .order('turno')
+          .order('nome') as List;
+    }
 
-    return (data as List)
-        .map((m) => Turma(
-              id:    m['id']    as String,
-              nome:  m['nome']  as String,
-              serie: m['serie'] as String? ?? '',
-              turno: TurnoX.fromString(m['turno'] as String? ?? 'matutino'),
-            ))
-        .toList();
+    return rows.map((m) {
+      final cursoMap = temCursoJoin
+          ? m['cursos_tecnicos'] as Map<String, dynamic>?
+          : null;
+      return Turma(
+        id:               m['id']    as String,
+        nome:             m['nome']  as String,
+        serie:            m['serie'] as String? ?? '',
+        turno:            TurnoX.fromString(m['turno'] as String? ?? 'matutino'),
+        etapa:            EtapaX.fromString(m['etapa'] as String?),
+        cursoTecnicoId:   temCursoJoin ? m['curso_tecnico_id'] as String? : null,
+        cursoTecnicoNome: cursoMap?['nome'] as String?,
+      );
+    }).toList();
   }
 
   // ── CRUD de turmas ────────────────────────────────────────────────────────
@@ -86,12 +104,27 @@ class CoordenacaoService {
     required String nome,
     required String serie,
     required Turno  turno,
+    Etapa?  etapa,
+    String? cursoTecnicoId,
   }) async {
-    await _db.from('turmas').insert({
+    final payload = <String, dynamic>{
       'nome':  nome.trim(),
       'serie': serie.trim(),
       'turno': turno.dbValue,
-    });
+      'etapa': etapa?.dbValue,
+    };
+    if (cursoTecnicoId != null) payload['curso_tecnico_id'] = cursoTecnicoId;
+    try {
+      await _db.from('turmas').insert(payload);
+    } catch (e) {
+      // Se a coluna curso_tecnico_id ainda não existe, tenta sem ela
+      if (e.toString().contains('curso_tecnico_id')) {
+        payload.remove('curso_tecnico_id');
+        await _db.from('turmas').insert(payload);
+      } else {
+        rethrow;
+      }
+    }
   }
 
   static Future<void> editarTurma({
@@ -99,12 +132,26 @@ class CoordenacaoService {
     required String nome,
     required String serie,
     required Turno  turno,
+    Etapa?  etapa,
+    String? cursoTecnicoId,
   }) async {
-    await _db.from('turmas').update({
+    final payload = <String, dynamic>{
       'nome':  nome.trim(),
       'serie': serie.trim(),
       'turno': turno.dbValue,
-    }).eq('id', id);
+      'etapa': etapa?.dbValue,
+    };
+    if (cursoTecnicoId != null) payload['curso_tecnico_id'] = cursoTecnicoId;
+    try {
+      await _db.from('turmas').update(payload).eq('id', id);
+    } catch (e) {
+      if (e.toString().contains('curso_tecnico_id')) {
+        payload.remove('curso_tecnico_id');
+        await _db.from('turmas').update(payload).eq('id', id);
+      } else {
+        rethrow;
+      }
+    }
   }
 
   static Future<void> excluirTurma(String turmaId) async {
@@ -430,7 +477,7 @@ class CoordenacaoService {
   // ── Excluir demanda ───────────────────────────────────────────────────────
 
   static Future<void> excluirDemanda(String demandaId) async {
-    // 1. Valida permissão: só quem criou pode apagar
+    // 1. Valida permissão: criador OU roles de gestão/direção podem apagar
     final demanda = await _db
         .from('demandas')
         .select('criada_por')
@@ -440,8 +487,21 @@ class CoordenacaoService {
     if (demanda == null) {
       throw Exception('Demanda não encontrada.');
     }
+
+    // Verifica role do usuário para permitir que gestão apague qualquer demanda
     if (demanda['criada_por'] != _userId) {
-      throw Exception('Apenas o criador da demanda pode removê-la.');
+      final perfil = await _db
+          .from('profiles')
+          .select('role')
+          .eq('id', _userId)
+          .single();
+      final role = perfil['role'] as String;
+      const rolesGestao = {
+        'diretor', 'diretor-adjunto', 'secretaria', 'supervisor', 'pcsa'
+      };
+      if (!rolesGestao.contains(role)) {
+        throw Exception('Apenas o criador da demanda pode removê-la.');
+      }
     }
 
     // 2. Anexos do storage
@@ -528,7 +588,7 @@ class CoordenacaoService {
     // 1. Busca status via demandas (coordenador já tem acesso à própria demanda)
     final data = await _db
         .from('demandas')
-        .select('demanda_professor(professor_id, status)')
+        .select('demanda_professor(professor_id, status, observacao)')
         .eq('id', demandaId)
         .eq('criada_por', _userId)
         .single();
@@ -549,8 +609,9 @@ class CoordenacaoService {
 
     // 3. Monta e ordena: concluída → visualizada → pendente
     final lista = rows.map((r) => StatusProfessor(
-          nome:   nomeMap[r['professor_id']] ?? 'Professor',
-          status: r['status'] as String,
+          nome:      nomeMap[r['professor_id']] ?? 'Professor',
+          status:    r['status'] as String,
+          observacao: r['observacao'] as String?,
         )).toList();
 
     const ordem = {'concluida': 0, 'visualizada': 1, 'pendente': 2};

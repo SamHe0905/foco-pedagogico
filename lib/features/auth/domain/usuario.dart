@@ -8,6 +8,8 @@ enum RoleUsuario {
   pcsa,
   /// Professor de Atendimento Educacional Especializado
   professorAee,
+  /// Secretaria da escola — membro da gestão
+  secretaria,
 }
 
 extension RoleUsuarioX on RoleUsuario {
@@ -18,6 +20,7 @@ extension RoleUsuarioX on RoleUsuario {
         'diretor-adjunto' => RoleUsuario.diretorAdjunto,
         'pcsa'            => RoleUsuario.pcsa,
         'professor_aee'   => RoleUsuario.professorAee,
+        'secretaria'      => RoleUsuario.secretaria,
         _                 => RoleUsuario.professor,
       };
 
@@ -29,6 +32,7 @@ extension RoleUsuarioX on RoleUsuario {
         RoleUsuario.diretorAdjunto => 'diretor-adjunto',
         RoleUsuario.pcsa          => 'pcsa',
         RoleUsuario.professorAee  => 'professor_aee',
+        RoleUsuario.secretaria    => 'secretaria',
       };
 
   /// Prefixo usado na saudação: "Prof. Samuel", "Coord. Samuel", etc.
@@ -40,6 +44,7 @@ extension RoleUsuarioX on RoleUsuario {
         RoleUsuario.diretorAdjunto => 'Dir. Adj.',
         RoleUsuario.pcsa          => 'PCSA',
         RoleUsuario.professorAee  => 'Prof. AEE',
+        RoleUsuario.secretaria    => 'Sec.',
       };
 
   /// Rótulo exibido abaixo da saudação.
@@ -51,11 +56,14 @@ extension RoleUsuarioX on RoleUsuario {
         RoleUsuario.diretorAdjunto => 'Direção Adjunta',
         RoleUsuario.pcsa          => 'Prof. Coord. de Suporte à Aprendizagem',
         RoleUsuario.professorAee  => 'Educação Especial (AEE)',
+        RoleUsuario.secretaria    => 'Secretaria',
       };
 
-  /// True para diretores (acesso total ao app).
+  /// True para diretores e secretaria (gestão — acesso total ao app).
   bool get isDirector =>
-      this == RoleUsuario.diretor || this == RoleUsuario.diretorAdjunto;
+      this == RoleUsuario.diretor ||
+      this == RoleUsuario.diretorAdjunto ||
+      this == RoleUsuario.secretaria;
 
   /// True para quem acessa o painel da coordenação.
   bool get isDashboard =>

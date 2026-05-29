@@ -45,9 +45,6 @@ bool hasInstallPrompt() {
 
 void triggerInstall() {
   try {
-    final prompt = js.context['deferredInstallPrompt'];
-    if (prompt != null) {
-      prompt.callMethod('prompt');
-    }
+    js.context.callMethod('triggerPwaInstall');
   } catch (_) {}
 }

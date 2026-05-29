@@ -6,7 +6,10 @@ import '../../features/auth/domain/usuario.dart';
 import '../../features/auth/presentation/auth_providers.dart';
 
 class SaudacaoHeader extends ConsumerWidget {
-  const SaudacaoHeader({super.key});
+  /// Widget opcional exibido à direita da saudação (ex: botão de ação rápida).
+  /// Renderizado via Stack para não interferir nas constraints do texto.
+  final Widget? action;
+  const SaudacaoHeader({super.key, this.action});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -22,9 +25,10 @@ class SaudacaoHeader extends ConsumerWidget {
         final nome     = SaudacaoHelper.nomeFormatado(usuario.nome, usuario.role);
         final cargo    = _cargo(usuario.role);
 
-        return Container(
+        final header = Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          // padding direita maior quando há botão para o texto não sobrepor
+          padding: EdgeInsets.fromLTRB(20, 14, action != null ? 160 : 20, 14),
           color: AppColors.surface,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,6 +50,19 @@ class SaudacaoHeader extends ConsumerWidget {
               ),
             ],
           ),
+        );
+
+        if (action == null) return header;
+
+        return Stack(
+          alignment: Alignment.centerRight,
+          children: [
+            header,
+            Positioned(
+              right: 12,
+              child: action!,
+            ),
+          ],
         );
       },
     );

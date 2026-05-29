@@ -15,12 +15,13 @@ import 'package:flutter/foundation.dart'
 /// );
 /// ```
 class DefaultFirebaseOptions {
+  // VAPID key: Firebase Console → Project settings → Cloud Messaging →
+  //            Web Push certificates → Generate key pair
+  static const String vapidKey = 'BLty2OHzNFK1mfF_oSnqlKnZnAsGlcOfOMKeiEOd-M_E5Y_tKDKVk19bZOKeszfoHkviTn1w5I3hgqU5dovb-yY';
+
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -51,6 +52,15 @@ class DefaultFirebaseOptions {
         );
     }
   }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyBfkQzNw18oRejjQ3wOPq6YxcpG_rDNxI4',
+    appId: '1:775783515922:web:5871609a2920e4c8d7d5cb',
+    messagingSenderId: '775783515922',
+    projectId: 'foco-pedagogico',
+    storageBucket: 'foco-pedagogico.firebasestorage.app',
+    authDomain: 'foco-pedagogico.firebaseapp.com',
+  );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAB2nNE4fHuIyIEf--H0LG71_gfuAzO0bM',

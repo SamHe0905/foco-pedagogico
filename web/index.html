@@ -43,6 +43,23 @@
     window.addEventListener('appinstalled', function() {
       window.deferredInstallPrompt = null;
     });
+    // Função global chamada pelo Flutter via dart:js
+    window.triggerPwaInstall = function() {
+      if (window.deferredInstallPrompt) {
+        window.deferredInstallPrompt.prompt();
+        window.deferredInstallPrompt = null;
+        return true;
+      }
+      return false;
+    };
+    window.canInstallPwa = function() {
+      return !!window.deferredInstallPrompt;
+    };
+
+    // Se a URL contiver ?install, salva no sessionStorage antes do router apagar o parâmetro
+    if (new URLSearchParams(window.location.search).has('install')) {
+      sessionStorage.setItem('pwa_install_requested', '1');
+    }
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

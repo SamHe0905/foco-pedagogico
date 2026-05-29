@@ -7,8 +7,8 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
 }
 
-const ROLES_COORDENADOR = ['professor', 'supervisor', 'coordenacao']
-const ROLES_DIRETOR     = ['professor', 'supervisor', 'coordenacao', 'diretor', 'diretor-adjunto']
+const ROLES_COORDENADOR = ['professor', 'professor_aee', 'supervisor', 'coordenacao', 'pcsa']
+const ROLES_DIRETOR     = ['professor', 'professor_aee', 'supervisor', 'coordenacao', 'pcsa', 'diretor', 'diretor-adjunto', 'secretaria']
 const ROLES_VALIDOS     = new Set(ROLES_DIRETOR)
 
 serve(async (req) => {
@@ -45,8 +45,8 @@ serve(async (req) => {
       .single()
 
     const myRole        = perfil?.role as string | undefined
-    const isDirector    = myRole === 'diretor' || myRole === 'diretor-adjunto'
-    const isCoordenador = myRole === 'coordenacao' || myRole === 'supervisor'
+    const isDirector    = myRole === 'diretor' || myRole === 'diretor-adjunto' || myRole === 'secretaria'
+    const isCoordenador = myRole === 'coordenacao' || myRole === 'supervisor' || myRole === 'pcsa'
 
     if (!isDirector && !isCoordenador) {
       return json({ error: 'Sem permissão.' }, 403)

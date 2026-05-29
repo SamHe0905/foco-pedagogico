@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
+import '../domain/curso_tecnico.dart';
 import '../domain/turma.dart';
 import '../services/coordenacao_service.dart';
+import '../services/cursos_tecnicos_service.dart';
 import 'coordenacao_providers.dart';
 
 class GerenciarTurmasScreen extends ConsumerWidget {
@@ -255,6 +257,25 @@ class _TurmaCardState extends ConsumerState<_TurmaCard> {
                     ),
                   ),
                 ],
+                if (widget.turma.etapa != null ||
+                    widget.turma.cursoTecnicoNome != null) ...[
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      if (widget.turma.etapa != null)
+                        _Badge(
+                          label: widget.turma.etapa!.label,
+                          color: AppColors.secondary,
+                        ),
+                      if (widget.turma.cursoTecnicoNome != null)
+                        _Badge(
+                          label: widget.turma.cursoTecnicoNome!,
+                          color: AppColors.primary,
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -295,6 +316,33 @@ class _TurmaCardState extends ConsumerState<_TurmaCard> {
   }
 }
 
+// ─── Badge ────────────────────────────────────────────────────────────────────
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color  color;
+  const _Badge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Dialog: criar/editar turma ───────────────────────────────────────────────
 
 class _TurmaFormDialog extends StatefulWidget {
@@ -309,17 +357,38 @@ class _TurmaFormDialog extends StatefulWidget {
 class _TurmaFormDialogState extends State<_TurmaFormDialog> {
   late final TextEditingController _nomeCtrl;
   late final TextEditingController _serieCtrl;
-  late Turno _turno;
-  bool _salvando = false;
+  late Turno  _turno;
+  Etapa?      _etapa;
+  String?     _cursoTecnicoId;
+  List<CursoTecnico> _cursosTecnicos = [];
+  bool _salvando       = false;
+  bool _carregandoCursos = true;
 
   bool get _editando => widget.turma != null;
 
   @override
   void initState() {
     super.initState();
-    _nomeCtrl  = TextEditingController(text: widget.turma?.nome  ?? '');
-    _serieCtrl = TextEditingController(text: widget.turma?.serie ?? '');
-    _turno     = widget.turma?.turno ?? Turno.matutino;
+    _nomeCtrl       = TextEditingController(text: widget.turma?.nome  ?? '');
+    _serieCtrl      = TextEditingController(text: widget.turma?.serie ?? '');
+    _turno          = widget.turma?.turno ?? Turno.matutino;
+    _etapa          = widget.turma?.etapa;
+    _cursoTecnicoId = widget.turma?.cursoTecnicoId;
+    _carregarCursos();
+  }
+
+  Future<void> _carregarCursos() async {
+    try {
+      final cursos = await CursosTecnicosService.getCursos();
+      if (mounted) {
+        setState(() {
+          _cursosTecnicos   = cursos;
+          _carregandoCursos = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _carregandoCursos = false);
+    }
   }
 
   @override
@@ -327,6 +396,16 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
     _nomeCtrl.dispose();
     _serieCtrl.dispose();
     super.dispose();
+  }
+
+  // Quando o turno muda, garante que a etapa selecionada ainda é válida
+  void _onTurnoChanged(Turno t) {
+    setState(() {
+      _turno = t;
+      if (_etapa != null && !_etapa!.turnosValidos.contains(t)) {
+        _etapa = null;
+      }
+    });
   }
 
   Future<void> _salvar() async {
@@ -338,16 +417,20 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
     try {
       if (_editando) {
         await CoordenacaoService.editarTurma(
-          id:    widget.turma!.id,
-          nome:  nome,
-          serie: serie,
-          turno: _turno,
+          id:             widget.turma!.id,
+          nome:           nome,
+          serie:          serie,
+          turno:          _turno,
+          etapa:          _etapa,
+          cursoTecnicoId: _cursoTecnicoId,
         );
       } else {
         await CoordenacaoService.criarTurma(
-          nome:  nome,
-          serie: serie,
-          turno: _turno,
+          nome:           nome,
+          serie:          serie,
+          turno:          _turno,
+          etapa:          _etapa,
+          cursoTecnicoId: _cursoTecnicoId,
         );
       }
       if (!mounted) return;
@@ -368,6 +451,11 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Etapas compatíveis com o turno selecionado
+    final etapasVisiveis = Etapa.values
+        .where((e) => e.turnosValidos.contains(_turno))
+        .toList();
+
     return AlertDialog(
       title: Text(_editando ? 'Editar Turma' : 'Nova Turma'),
       content: SingleChildScrollView(
@@ -383,6 +471,7 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
                 labelText: 'Nome da turma *',
                 hintText: 'Ex: 9A, 7B, 1ºEM',
               ),
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
 
@@ -398,12 +487,11 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
             const SizedBox(height: 16),
 
             // Turno
-            Text(
-              'Turno',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
+            Text('Turno',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -413,12 +501,11 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
                 return FilterChip(
                   label: Text(t.label),
                   selected: sel,
-                  onSelected: (_) => setState(() => _turno = t),
+                  onSelected: (_) => _onTurnoChanged(t),
                   selectedColor: AppColors.primary.withValues(alpha: 0.15),
                   checkmarkColor: AppColors.primary,
                   side: BorderSide(
-                    color: sel ? AppColors.primary : AppColors.divider,
-                  ),
+                      color: sel ? AppColors.primary : AppColors.divider),
                   labelStyle: TextStyle(
                     color: sel ? AppColors.primary : AppColors.textSecondary,
                     fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
@@ -426,6 +513,110 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
                 );
               }).toList(),
             ),
+            const SizedBox(height: 16),
+
+            // Etapa de ensino
+            Text('Etapa de ensino',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text('Define qual coordenador recebe as solicitações desta turma.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: etapasVisiveis.map((e) {
+                final sel = _etapa == e;
+                return FilterChip(
+                  label: Text(e.label),
+                  selected: sel,
+                  onSelected: (_) => setState(() {
+                    _etapa = sel ? null : e;
+                    // Curso técnico só faz sentido no Médio
+                    if (_etapa != Etapa.medioParcial) _cursoTecnicoId = null;
+                  }),
+                  selectedColor: AppColors.secondary.withValues(alpha: 0.15),
+                  checkmarkColor: AppColors.secondary,
+                  side: BorderSide(
+                      color: sel ? AppColors.secondary : AppColors.divider),
+                  labelStyle: TextStyle(
+                    color: sel ? AppColors.secondary : AppColors.textSecondary,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                );
+              }).toList(),
+            ),
+            // Curso técnico (apenas para Ensino Médio e quando há cursos cadastrados)
+            if (!_carregandoCursos && _cursosTecnicos.isNotEmpty &&
+                _etapa == Etapa.medioParcial) ...[
+              const SizedBox(height: 16),
+              Text('Curso Técnico',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text('Preencha se for uma turma do ensino técnico.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilterChip(
+                    label: const Text('Nenhum'),
+                    selected: _cursoTecnicoId == null,
+                    onSelected: (_) =>
+                        setState(() => _cursoTecnicoId = null),
+                    selectedColor: AppColors.divider,
+                    checkmarkColor: AppColors.textSecondary,
+                    side: BorderSide(
+                        color: _cursoTecnicoId == null
+                            ? AppColors.textSecondary
+                            : AppColors.divider),
+                    labelStyle: TextStyle(
+                      color: _cursoTecnicoId == null
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
+                      fontWeight: _cursoTecnicoId == null
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                    ),
+                  ),
+                  ..._cursosTecnicos.map((c) {
+                    final sel = _cursoTecnicoId == c.id;
+                    return FilterChip(
+                      label: Text(c.nome),
+                      selected: sel,
+                      onSelected: (_) =>
+                          setState(() => _cursoTecnicoId = sel ? null : c.id),
+                      selectedColor:
+                          AppColors.secondary.withValues(alpha: 0.15),
+                      checkmarkColor: AppColors.secondary,
+                      side: BorderSide(
+                          color:
+                              sel ? AppColors.secondary : AppColors.divider),
+                      labelStyle: TextStyle(
+                        color: sel
+                            ? AppColors.secondary
+                            : AppColors.textSecondary,
+                        fontWeight:
+                            sel ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -435,9 +626,7 @@ class _TurmaFormDialogState extends State<_TurmaFormDialog> {
           child: const Text('Cancelar'),
         ),
         FilledButton(
-          onPressed: _salvando || _nomeCtrl.text.trim().isEmpty
-              ? null
-              : _salvar,
+          onPressed: _salvando || _nomeCtrl.text.trim().isEmpty ? null : _salvar,
           child: _salvando
               ? const SizedBox(
                   width: 16,
