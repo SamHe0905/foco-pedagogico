@@ -46,7 +46,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: AppRoutes.login,
     refreshListenable: goRouterAuthNotifier,
     onException: (_, __, router) => router.go(AppRoutes.login),
-    errorBuilder: (context, state) => const LoginScreen(),
     redirect: (context, state) {
       final autenticado  = goRouterAuthNotifier.isAuthenticated;
       final loc          = state.matchedLocation;
