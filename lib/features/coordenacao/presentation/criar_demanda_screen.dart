@@ -113,7 +113,7 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
     setState(() => _enviando = true);
 
     try {
-      final demandaId = await CoordenacaoService.criarDemanda(
+      final demandaId = await DemandasCoordenacaoService.criarDemanda(
         titulo:       _tituloController.text,
         descricao:    _descricaoController.text,
         tipo:         _tipo,
@@ -128,7 +128,7 @@ class _CriarDemandaScreenState extends ConsumerState<CriarDemandaScreen> {
       // Upload dos arquivos selecionados (se houver)
       for (final arquivo in _arquivos) {
         if (arquivo.bytes != null) {
-          await CoordenacaoService.uploadAnexo(
+          await AnexosService.uploadAnexo(
             demandaId,
             arquivo.name,
             arquivo.bytes!,

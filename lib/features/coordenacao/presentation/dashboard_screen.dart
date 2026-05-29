@@ -121,7 +121,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     setState(() => _excluindo = true);
     try {
       for (final d in selecionadas) {
-        await CoordenacaoService.excluirDemanda(d.id);
+        await DemandasCoordenacaoService.excluirDemanda(d.id);
       }
       if (!mounted) return;
       _cancelarSelecao();

@@ -64,7 +64,7 @@ class _EditarDemandaScreenState extends ConsumerState<EditarDemandaScreen> {
     setState(() => _salvando = true);
 
     try {
-      await CoordenacaoService.editarDemanda(
+      await DemandasCoordenacaoService.editarDemanda(
         demandaId: widget.demanda.id,
         titulo:    _tituloController.text,
         descricao: _descricaoController.text,

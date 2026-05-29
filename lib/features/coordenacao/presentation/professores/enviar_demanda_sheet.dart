@@ -42,7 +42,7 @@ class _EnviarDemandaSheetState extends State<_EnviarDemandaSheet> {
   Future<void> _enviar() async {
     setState(() { _enviando = true; _erro = null; });
     try {
-      await CoordenacaoService.criarDemanda(
+      await DemandasCoordenacaoService.criarDemanda(
         titulo:       _tituloController.text,
         descricao:    _descricaoController.text,
         tipo:         'individual',

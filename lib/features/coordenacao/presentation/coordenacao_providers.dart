@@ -10,38 +10,38 @@ import '../services/coordenacao_service.dart';
 import '../services/cursos_tecnicos_service.dart';
 
 final coordenacaoDemandasProvider = FutureProvider<List<DemandaResumo>>((ref) {
-  return CoordenacaoService.getDemandas();
+  return DemandasCoordenacaoService.getDemandas();
 });
 
 final todasDemandasProvider = FutureProvider<List<DemandaResumo>>((ref) {
-  return CoordenacaoService.getTodasDemandas();
+  return DemandasCoordenacaoService.getTodasDemandas();
 });
 
 final turmasProvider = FutureProvider<List<Turma>>((ref) {
-  return CoordenacaoService.getTurmas();
+  return TurmasService.getTurmas();
 });
 
 final professoresProvider = FutureProvider<List<ProfessorItem>>((ref) {
-  return CoordenacaoService.getProfessores();
+  return EquipeService.getProfessores();
 });
 
 final detalhesProfessoresProvider =
     FutureProvider.family<List<StatusProfessor>, String>((ref, demandaId) {
-  return CoordenacaoService.getDetalhesProfessores(demandaId);
+  return DemandasCoordenacaoService.getDetalhesProfessores(demandaId);
 });
 
 final professoresPerfisProvider = FutureProvider<List<ProfessorPerfil>>((ref) {
-  return CoordenacaoService.getProfessoresPerfis();
+  return EquipeService.getProfessoresPerfis();
 });
 
 final professoresPendentesProvider =
     FutureProvider<List<ProfessorComPendencias>>((ref) {
-  return CoordenacaoService.getProfessoresPendentes();
+  return DemandasCoordenacaoService.getProfessoresPendentes();
 });
 
 final anexosProvider =
     FutureProvider.family<List<DemandaAnexo>, String>((ref, demandaId) {
-  return CoordenacaoService.getAnexos(demandaId);
+  return AnexosService.getAnexos(demandaId);
 });
 
 /// Categoria de demanda selecionada no dashboard (null = home com cards)

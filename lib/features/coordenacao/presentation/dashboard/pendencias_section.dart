@@ -17,7 +17,7 @@ class _PendenciasSectionState extends ConsumerState<_PendenciasSection> {
     setState(() => _notificando = true);
     try {
       final ids = widget.atrasadas.map((d) => d.id).toList();
-      await CoordenacaoService.notificarAtrasados(ids);
+      await DemandasCoordenacaoService.notificarAtrasados(ids);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

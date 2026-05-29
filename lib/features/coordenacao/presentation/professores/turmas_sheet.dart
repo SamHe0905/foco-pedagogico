@@ -24,7 +24,7 @@ class _TurmasSheetState extends ConsumerState<_TurmasSheet> {
   Future<void> _salvar() async {
     setState(() => _salvando = true);
     try {
-      await CoordenacaoService.atualizarTurmasProfessor(
+      await EquipeService.atualizarTurmasProfessor(
         widget.membro.id,
         _selecionadas.toList(),
       );

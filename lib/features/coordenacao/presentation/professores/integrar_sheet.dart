@@ -36,7 +36,7 @@ class _IntegrarSheetState extends ConsumerState<_IntegrarSheet> {
   Future<void> _enviar() async {
     setState(() { _enviando = true; _erro = null; });
     try {
-      await CoordenacaoService.integrarDocente(
+      await ConvitesService.integrarDocente(
         _emailController.text,
         _nomeController.text,
         _roleSelecionada,

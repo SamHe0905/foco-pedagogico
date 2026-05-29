@@ -39,7 +39,7 @@ class _AnexosSectionState extends ConsumerState<AnexosSection> {
 
     setState(() => _uploading = true);
     try {
-      await CoordenacaoService.uploadAnexo(
+      await AnexosService.uploadAnexo(
         widget.demandaId,
         file.name,
         file.bytes!,
@@ -60,7 +60,7 @@ class _AnexosSectionState extends ConsumerState<AnexosSection> {
 
   Future<void> _delete(DemandaAnexo anexo) async {
     try {
-      await CoordenacaoService.deleteAnexo(anexo.id, anexo.storagePath);
+      await AnexosService.deleteAnexo(anexo.id, anexo.storagePath);
       ref.invalidate(anexosProvider(widget.demandaId));
     } catch (_) {
       if (!mounted) return;
