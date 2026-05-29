@@ -79,18 +79,38 @@ class _NovaDemandaButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FilledButton.icon(
-      onPressed: () async {
-        await context.push(AppRoutes.criarDemanda);
-        ref.invalidate(coordenacaoDemandasProvider);
-      },
-      icon: const Icon(Icons.add_rounded, size: 18),
-      label: const Text('Nova Demanda'),
-      style: FilledButton.styleFrom(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    // Implementacao via Material + InkWell em vez de FilledButton.icon porque
+    // FilledButton.icon nao renderiza dentro de Positioned sem dimensoes
+    // explicitas em release mode no Flutter Web (bug observado em ff6a1d0
+    // tambem). Visual identico ao botao azul anterior.
+    return SizedBox(
+      width: 148,
+      height: 40,
+      child: Material(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () async {
+            await context.push(AppRoutes.criarDemanda);
+            ref.invalidate(coordenacaoDemandasProvider);
+          },
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_rounded, size: 18, color: Colors.white),
+              SizedBox(width: 6),
+              Text(
+                'Nova Demanda',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
